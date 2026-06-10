@@ -50,6 +50,7 @@ async def get_status(tid: str):
     t = await _load(tid)
     return TournamentStatus(
         id=t.id, phase=t.phase, run_hash=t.run_hash, champion_id=t.champion_id,
+        runner_up_id=t.runner_up_id, third_place_id=t.third_place_id,
         teams=len(t.teams), groups=len(t.standings),
     )
 

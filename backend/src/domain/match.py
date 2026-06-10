@@ -37,6 +37,8 @@ class MatchStats(BaseModel):
     poss_home: float = 0.5
     shots_home: int = 0
     shots_away: int = 0
+    fairplay_home: int = 0       # disciplinary demerits (yellow=1, send-off=+3)
+    fairplay_away: int = 0
 
 
 class MatchResult(BaseModel):

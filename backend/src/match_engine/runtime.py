@@ -307,11 +307,14 @@ class SimulationRuntime:
             winner = "home" if ph > pa else "away"
 
         tot_poss = world.poss[0] + world.poss[1] or 1
+        fair = [sum(p.yellow + (3 if p.sent_off else 0) for p in t.players)
+                for t in world.teams]
         result = MatchResult(
             match_id=req.match_id, score_home=world.score[0], score_away=world.score[1],
             decided_by=decided_by, winner=winner, events=acc.events,
             stats=MatchStats(poss_home=round(world.poss[0] / tot_poss, 3),
-                             shots_home=world.shots[0], shots_away=world.shots[1]),
+                             shots_home=world.shots[0], shots_away=world.shots[1],
+                             fairplay_home=fair[0], fairplay_away=fair[1]),
         )
         if capture_frames:
             result.frames = acc.frames  # type: ignore[attr-defined]

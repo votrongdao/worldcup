@@ -319,4 +319,18 @@ Work is tracked as one PR per workstream into `dev`:
 
 **Perf:** ~0.6 s/match headless (≈0.6 s × 63 ≈ 40 s sequential; ~15–25 s in Docker with 4 workers).
 
-### WS2–WS6 — not started.
+### WS3 — Tournament rules · **done**
+- ✅ Full tiebreaker chain in `ratings/standings.py`: points → GD → GF → **head-to-head**
+  (mini-table among the tied cluster) → **fair-play** (disciplinary demerits) → seeded lot.
+- ✅ Fair-play wired end-to-end: the engine emits demerits (`yellow=1`, `send-off=+3`) →
+  `MatchStats`/`MatchSummary` → cumulative `Standing.fair`.
+- ✅ **Third-place playoff** (SF losers) when `config.third_place`; `Phase.THIRD_PLACE`;
+  tournament records gold / silver / **bronze** (`champion_id` / `runner_up_id` / `third_place_id`).
+- ✅ `TournamentPolicy.resolve_draw` is now the single authority guaranteeing a decisive knockout
+  (delegates to the engine's ET/shootout; seeded-lot safety net otherwise) — used by the FSM.
+- ✅ API surfaces runner-up + bronze on the status DTO.
+- ✅ Tests: `test_tiebreakers` (three-way head-to-head, fair-play, deterministic seeded lot),
+  e2e `test_medals_gold_silver_bronze`; full suite green (12/12). Verified: a cup now yields
+  gold/silver/bronze with a real third-place match.
+
+### WS2, WS4–WS6 — not started.

@@ -33,12 +33,24 @@ async def test_tournament_completes():
     t = await _run(seed=2026, teams=8, groups=2)
     assert t.phase is Phase.DONE
     assert t.champion_id in t.teams
-    # 2 groups x 6 round-robin matches + SF(2) + Final(1).
-    assert len(t.results) == 12 + 3
+    # 2 groups x 6 round-robin matches + SF(2) + Final(1) + 3rd-place(1).
+    assert len(t.results) == 12 + 3 + 1
     phases = [b.phase for b in t.bracket]
     assert phases.count(Phase.SF) == 2
     assert phases.count(Phase.FINAL) == 1
+    assert phases.count(Phase.THIRD_PLACE) == 1
     assert all(len(table) == 4 for table in t.standings.values())
+
+
+@pytest.mark.asyncio
+async def test_medals_gold_silver_bronze():
+    t = await _run(seed=2026, teams=8, groups=2)
+    assert t.champion_id in t.teams
+    assert t.runner_up_id in t.teams
+    assert t.third_place_id in t.teams                 # third-place playoff happened
+    medals = {t.champion_id, t.runner_up_id, t.third_place_id}
+    assert len(medals) == 3                            # three distinct teams
+    assert any(b.phase is Phase.THIRD_PLACE for b in t.bracket)
 
 
 @pytest.mark.asyncio

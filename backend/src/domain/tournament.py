@@ -9,7 +9,8 @@ from .team import Team
 
 class Phase(str, Enum):
     SETUP = "setup"; GENERATING = "generating"; DRAW = "draw"; GROUP = "group"
-    R16 = "r16"; QF = "qf"; SF = "sf"; FINAL = "final"; DONE = "done"
+    R16 = "r16"; QF = "qf"; SF = "sf"; THIRD_PLACE = "third_place"
+    FINAL = "final"; DONE = "done"
 
 
 class TournamentConfig(BaseModel):
@@ -44,6 +45,8 @@ class MatchSummary(BaseModel):
     score_away: int
     decided_by: str = "regulation"
     winner_id: Optional[str] = None   # resolved team id (None only for legal draws)
+    fairplay_home: int = 0
+    fairplay_away: int = 0
 
 
 class Standing(BaseModel):
@@ -56,6 +59,7 @@ class Standing(BaseModel):
     gf: int = 0
     ga: int = 0
     pts: int = 0
+    fair: int = 0                     # cumulative fair-play demerits (fewer is better)
 
 
 class BracketSlot(BaseModel):
@@ -78,3 +82,5 @@ class Tournament(BaseModel):
     standings: dict[str, list[Standing]] = {}           # group letter -> ordered table
     bracket: list[BracketSlot] = []
     champion_id: Optional[str] = None
+    runner_up_id: Optional[str] = None
+    third_place_id: Optional[str] = None

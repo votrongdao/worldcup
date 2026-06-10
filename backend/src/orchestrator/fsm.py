@@ -20,6 +20,7 @@ from src.seed.provider import sub_seed
 from .aggregator import ResultAggregator
 from .dispatcher import MatchDispatcher
 from .draw import DrawAgent
+from .policy import TournamentPolicy
 from .progression import ProgressionManager
 from .scheduler import SchedulerAgent
 from .supervisor import RunSupervisor
@@ -42,9 +43,11 @@ class TournamentOrchestrator:
         self._progress = ProgressionManager()
         self._aggregate = ResultAggregator(log, llm)
         self._supervisor = RunSupervisor(store)
+        self._policy = TournamentPolicy(0)
 
     async def start(self, config: TournamentConfig) -> Tournament:
         t = Tournament(id=f"wc-{config.seed}", config=config)
+        self._policy = TournamentPolicy(config.seed)
 
         t.phase = Phase.GENERATING
         teams = [self._gen.generate(config.seed, i, nation_name(i))
@@ -73,6 +76,7 @@ class TournamentOrchestrator:
 
         groups = sorted(set(t.group_of.values()))
         tables = {g: empty_table(t.group_of, g) for g in groups}
+        group_results: dict[str, list[MatchSummary]] = {g: [] for g in groups}
 
         by_day: dict[int, list[Fixture]] = {}
         for f in fixtures:
@@ -83,12 +87,16 @@ class TournamentOrchestrator:
             for fixture, summary in await self._play(t, by_day[day], knockout=False):
                 if fixture.group:
                     apply_result(tables[fixture.group], summary)
+                    group_results[fixture.group].append(summary)
 
-        t.standings = {g: order_group(tables[g], t.config.seed, g) for g in groups}
+        # Order each table with the full tiebreaker chain (head-to-head needs results).
+        t.standings = {g: order_group(tables[g], group_results[g], t.config.seed, g)
+                       for g in groups}
 
     async def _run_knockouts(self, t: Tournament) -> None:
         qual = self._progress.qualifiers(t.standings, t.config.advance_per_group)
         pairings = self._progress.build_bracket(qual)
+        sf_losers: list[str] = []
 
         while pairings:
             phase = _PHASE_BY_PAIRS.get(len(pairings), Phase.FINAL)
@@ -102,12 +110,28 @@ class TournamentOrchestrator:
                     match_id=fixture.id, phase=phase, home_id=fixture.home_id,
                     away_id=fixture.away_id, winner_id=summary.winner_id))
 
-            winners = [summary.winner_id for _, summary in played if summary.winner_id]
+            if phase is Phase.SF:
+                sf_losers = [self._loser(f, s) for f, s in played if self._loser(f, s)]
+
+            winners = [s.winner_id for _, s in played if s.winner_id]
             if len(winners) <= 1:
                 t.champion_id = winners[0] if winners else None
+                if played:
+                    t.runner_up_id = self._loser(*played[0])
                 break
             pairings = self._progress.advance(pairings, winners)
             await self._supervisor.snapshot(t)
+
+        # Third-place playoff between the two semi-final losers.
+        if t.config.third_place and len(sf_losers) == 2:
+            t.phase = Phase.THIRD_PLACE
+            fx = self._sched.knockout_fixtures(Phase.THIRD_PLACE, [(sf_losers[0], sf_losers[1])])
+            t.fixtures.extend(fx)
+            for fixture, summary in await self._play(t, fx, knockout=True):
+                t.bracket.append(BracketSlot(
+                    match_id=fixture.id, phase=Phase.THIRD_PLACE, home_id=fixture.home_id,
+                    away_id=fixture.away_id, winner_id=summary.winner_id))
+                t.third_place_id = summary.winner_id
 
     # ------------------------------------------------------------------ #
     async def _play(self, t: Tournament, fixtures: list[Fixture],
@@ -127,17 +151,28 @@ class TournamentOrchestrator:
         played: list[tuple[Fixture, MatchSummary]] = []
         for fixture, result in zip(fixtures, results):
             await self._aggregate.ingest(result)
+            if knockout:
+                result = self._policy.resolve_draw(result, fixture.id)  # guarantee a winner
             winner_id = (fixture.home_id if result.winner == "home"
                          else fixture.away_id if result.winner == "away" else None)
             summary = MatchSummary(
                 match_id=fixture.id, home_id=fixture.home_id, away_id=fixture.away_id,
                 phase=fixture.phase, score_home=result.score_home,
                 score_away=result.score_away, decided_by=result.decided_by,
-                winner_id=winner_id,
+                winner_id=winner_id, fairplay_home=result.stats.fairplay_home,
+                fairplay_away=result.stats.fairplay_away,
             )
             t.results[fixture.id] = summary
             played.append((fixture, summary))
         return played
+
+    @staticmethod
+    def _loser(fixture: Fixture, summary: MatchSummary) -> str | None:
+        if summary.winner_id == fixture.home_id:
+            return fixture.away_id
+        if summary.winner_id == fixture.away_id:
+            return fixture.home_id
+        return None
 
     @staticmethod
     def _run_hash(t: Tournament) -> str:

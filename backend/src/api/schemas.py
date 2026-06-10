@@ -28,6 +28,8 @@ class TournamentStatus(CamelModel):
     phase: Phase
     run_hash: str = ""
     champion_id: Optional[str] = None
+    runner_up_id: Optional[str] = None
+    third_place_id: Optional[str] = None
     teams: int = 0
     groups: int = 0
 
