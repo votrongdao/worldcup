@@ -4,6 +4,8 @@ from src.domain.tournament import Standing
 
 
 class ProgressionManager:
+    name = "progression_manager"
+
     def qualifiers(self, group_standings: dict[str, list[Standing]], n: int) -> dict[str, list[str]]:
         """Top-n team ids per group (tables are assumed already ordered)."""
         return {group: [s.team_id for s in table[:n]]

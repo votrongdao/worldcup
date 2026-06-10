@@ -17,6 +17,7 @@ from src.domain.match import MatchRequest, MatchResult
 _QUEUE_KEY = "q:matches"
 _RESULT_PREFIX = "result:"
 _FRAME_CHANNEL = "frames:"
+_EVENT_PREFIX = "events:"
 _RESULT_TTL = 3600   # seconds a result waits for its consumer
 _POLL = 0.1          # seconds between empty RPOP polls
 
@@ -67,6 +68,19 @@ class RedisBackend:
     # --- SignalRPort ---------------------------------------------------
     async def push(self, group: str, frame: dict) -> None:
         await self._r.publish(_FRAME_CHANNEL + group, json.dumps(frame))
+
+    # --- EventBus ------------------------------------------------------
+    async def emit(self, topic: str, event: dict) -> None:
+        key = _EVENT_PREFIX + topic
+        payload = json.dumps(event)
+        await self._r.rpush(key, payload)
+        await self._r.ltrim(key, -500, -1)        # keep the last 500 events
+        await self._r.expire(key, 86400)
+        await self._r.publish("ev:" + topic, payload)   # realtime fan-out
+
+    async def history(self, topic: str, limit: int = 200) -> list[dict]:
+        raw = await self._r.lrange(_EVENT_PREFIX + topic, -limit, -1)
+        return [json.loads(x) for x in raw]
 
     async def close(self) -> None:
         await self._r.aclose()

@@ -36,5 +36,14 @@ class SignalRPort(Protocol):
     async def push(self, group: str, frame: dict) -> None: ...
 
 
+class EventBus(Protocol):
+    """Agentic event bus: agents emit domain events; subscribers read recent history.
+
+    Locally backed by Redis (pub/sub + a capped list per topic) or in-memory for tests.
+    """
+    async def emit(self, topic: str, event: dict) -> None: ...
+    async def history(self, topic: str, limit: int = 200) -> list[dict]: ...
+
+
 class LlmGateway(Protocol):
     async def complete(self, prompt: str, seed_key: str) -> str: ...

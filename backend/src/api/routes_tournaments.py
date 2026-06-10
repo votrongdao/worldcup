@@ -35,7 +35,8 @@ async def _load(tid: str) -> Tournament:
 
 async def _run(config) -> None:
     d = get_deps()
-    orch = TournamentOrchestrator(d.queue, d.store, d.log, d.bus, d.llm)
+    orch = TournamentOrchestrator(d.queue, d.store, d.log, d.bus, d.llm,
+                                  events=d.events, cache=d.cache)
     await orch.start(config)
 
 
@@ -53,6 +54,12 @@ async def get_status(tid: str):
         runner_up_id=t.runner_up_id, third_place_id=t.third_place_id,
         teams=len(t.teams), groups=len(t.standings),
     )
+
+
+@router.get("/{tid}/activity")
+async def get_activity(tid: str, limit: int = 200) -> list[dict]:
+    """Live agentic event feed for a run (run_started, phase, match, run_finished)."""
+    return await get_deps().events.history(tid, limit=limit)
 
 
 @router.get("/{tid}/standings", response_model=dict[str, list[StandingDTO]])

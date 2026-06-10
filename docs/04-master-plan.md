@@ -333,4 +333,19 @@ Work is tracked as one PR per workstream into `dev`:
   e2e `test_medals_gold_silver_bronze`; full suite green (12/12). Verified: a cup now yields
   gold/silver/bronze with a real third-place match.
 
-### WS2, WS4–WS6 — not started.
+### WS2 — Agentic core · **done** (pragmatic scope)
+- ✅ **EventBus** port + Redis adapter (capped list per topic + pub/sub fan-out) and an in-memory
+  adapter for tests; added to the `Deps` bundle.
+- ✅ Concrete **`TournamentRunContext`** carrying the seed and a topic-scoped `emit()`.
+- ✅ **AgentRegistry** populated and *used* by the orchestrator (sub-agents resolved by name).
+- ✅ **Blackboard** backed by the `Cache` port writes a hot live status on every phase change
+  (durable snapshots still go to Postgres via the supervisor) — the SSOT pattern.
+- ✅ Orchestrator emits domain events (`run_started`, `phase`, `match`, `run_finished`) onto the bus;
+  `GET /tournaments/{id}/activity` exposes the live agentic feed.
+- ✅ Tests: `test_agentic` (bus history/scope, run-context emit, registry lookup) + e2e activity
+  assertion; suite green (15/15).
+- **Deliberate scope:** the FSM stays **await-based** (per-round barriers) for reproducibility;
+  events are emitted for observability and to feed the live UI (WS4), rather than rewriting the
+  conductor into a fully event-driven reactor. The bus/registry/blackboard substrate is now real.
+
+### WS4–WS6 — not started.

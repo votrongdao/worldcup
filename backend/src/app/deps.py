@@ -9,6 +9,7 @@ from functools import lru_cache
 
 from src.infra.ports import (
     Cache,
+    EventBus,
     EventLog,
     LlmGateway,
     MatchQueue,
@@ -29,6 +30,7 @@ class Deps:
     cache: Cache
     signalr: SignalRPort
     llm: LlmGateway
+    events: EventBus
 
 
 def _build(settings: Settings) -> Deps:
@@ -42,7 +44,7 @@ def _build(settings: Settings) -> Deps:
         llm: LlmGateway = (AzureOpenAIGateway(settings, mem)
                            if settings.llm_enabled else NullLlmGateway())
         return Deps(settings, queue=mem, bus=mem, store=mem, log=mem,
-                    cache=mem, signalr=mem, llm=llm)
+                    cache=mem, signalr=mem, llm=llm, events=mem)
 
     if backend == "local":
         from src.infra.redis_backend import RedisBackend
@@ -53,7 +55,7 @@ def _build(settings: Settings) -> Deps:
         rb = RedisBackend(settings.redis_url)
         llm = (AzureOpenAIGateway(settings, rb)
                if settings.llm_enabled else NullLlmGateway())
-        return Deps(settings, queue=rb, bus=rb, cache=rb, signalr=rb,
+        return Deps(settings, queue=rb, bus=rb, cache=rb, signalr=rb, events=rb,
                     store=PostgresStore(settings.pg_dsn),
                     log=BlobEventLog(settings.blob_conn), llm=llm)
 
@@ -69,7 +71,7 @@ def _build(settings: Settings) -> Deps:
     queue = ServiceBusQueue(settings.servicebus_conn)
     llm = (AzureOpenAIGateway(settings, rb)
            if settings.llm_enabled else NullLlmGateway())
-    return Deps(settings, queue=queue, bus=rb, cache=rb,
+    return Deps(settings, queue=queue, bus=rb, cache=rb, events=rb,
                 signalr=AzureSignalR(settings.signalr_conn),
                 store=PostgresStore(settings.pg_dsn),
                 log=BlobEventLog(settings.blob_conn), llm=llm)

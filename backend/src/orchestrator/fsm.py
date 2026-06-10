@@ -12,12 +12,17 @@ from src.domain.tournament import (
     Tournament,
     TournamentConfig,
 )
-from src.infra.ports import EventLog, LlmGateway, MatchQueue, ResultBus, StateStore
+from src.infra.ports import (
+    Cache, EventBus, EventLog, LlmGateway, MatchQueue, ResultBus, StateStore,
+)
+from src.agents.base import TournamentRunContext
+from src.agents.registry import AgentRegistry
 from src.generation.national_team_generator import NationalTeamGenerator
 from src.generation.nations import nation_name
 from src.ratings.standings import apply_result, empty_table, order_group
 from src.seed.provider import sub_seed
 from .aggregator import ResultAggregator
+from .blackboard import Blackboard
 from .dispatcher import MatchDispatcher
 from .draw import DrawAgent
 from .policy import TournamentPolicy
@@ -33,9 +38,11 @@ class TournamentOrchestrator:
     name = "tournament_orchestrator"
 
     def __init__(self, queue: MatchQueue, store: StateStore, log: EventLog,
-                 bus: ResultBus, llm: LlmGateway | None = None) -> None:
+                 bus: ResultBus, llm: LlmGateway | None = None,
+                 events: EventBus | None = None, cache: Cache | None = None) -> None:
         self._store = store
         self._bus = bus
+        self._events = events
         self._gen = NationalTeamGenerator()
         self._draw = DrawAgent()
         self._sched = SchedulerAgent()
@@ -44,28 +51,54 @@ class TournamentOrchestrator:
         self._aggregate = ResultAggregator(log, llm)
         self._supervisor = RunSupervisor(store)
         self._policy = TournamentPolicy(0)
+        self._bb = Blackboard(cache) if cache is not None else None
+        self._ctx: TournamentRunContext | None = None
+
+        # Agentic substrate: the conductor resolves its sub-agents from a registry.
+        self._registry = AgentRegistry()
+        for agent in (self._gen, self._draw, self._sched, self._progress):
+            self._registry.register(agent)
+
+    async def _set_phase(self, t: Tournament, phase: Phase) -> None:
+        t.phase = phase
+        await self._emit("phase", phase=phase.value)
+        if self._bb is not None:
+            await self._bb.set_status(t.id, {
+                "phase": phase.value, "champion": t.champion_id,
+                "runnerUp": t.runner_up_id, "thirdPlace": t.third_place_id,
+            })
+
+    async def _emit(self, type_: str, **payload) -> None:
+        if self._ctx is not None:
+            await self._ctx.emit(type_, **payload)
 
     async def start(self, config: TournamentConfig) -> Tournament:
         t = Tournament(id=f"wc-{config.seed}", config=config)
         self._policy = TournamentPolicy(config.seed)
+        self._ctx = TournamentRunContext(config.seed, self._events, topic=t.id)
+        await self._emit("run_started", seed=config.seed, teams=config.teams,
+                         groups=config.groups)
 
-        t.phase = Phase.GENERATING
-        teams = [self._gen.generate(config.seed, i, nation_name(i))
+        await self._set_phase(t, Phase.GENERATING)
+        teams = [self._registry.get("national_team_generator").generate(config.seed, i, nation_name(i))
                  for i in range(config.teams)]
         t.teams = {tm.id: tm for tm in teams}
 
-        t.phase = Phase.DRAW
-        t.group_of = self._draw.draw(config.seed, teams, config.groups)
+        await self._set_phase(t, Phase.DRAW)
+        t.group_of = self._registry.get("draw_agent").draw(config.seed, teams, config.groups)
         await self._supervisor.snapshot(t)
 
-        t.phase = Phase.GROUP
+        await self._set_phase(t, Phase.GROUP)
         await self._run_group_stage(t)
         await self._supervisor.snapshot(t)
 
         await self._run_knockouts(t)
 
         t.run_hash = self._run_hash(t)
-        t.phase = Phase.DONE
+        await self._set_phase(t, Phase.DONE)
+        await self._emit("run_finished", champion=t.champion_id,
+                         runnerUp=t.runner_up_id, thirdPlace=t.third_place_id,
+                         runHash=t.run_hash)
         await self._supervisor.snapshot(t)
         return t
 
@@ -164,6 +197,10 @@ class TournamentOrchestrator:
             )
             t.results[fixture.id] = summary
             played.append((fixture, summary))
+            await self._emit("match", id=fixture.id, phase=fixture.phase.value,
+                             home=fixture.home_id, away=fixture.away_id,
+                             scoreHome=result.score_home, scoreAway=result.score_away,
+                             winner=winner_id, decidedBy=result.decided_by)
         return played
 
     @staticmethod

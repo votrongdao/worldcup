@@ -17,7 +17,8 @@ async def _run(seed: int, teams: int, groups: int):
     deps = get_deps()
     workers = [asyncio.create_task(worker_loop(deps, name=f"w{i}")) for i in range(4)]
     try:
-        orch = TournamentOrchestrator(deps.queue, deps.store, deps.log, deps.bus, deps.llm)
+        orch = TournamentOrchestrator(deps.queue, deps.store, deps.log, deps.bus,
+                                      deps.llm, deps.events, deps.cache)
         cfg = TournamentConfig(teams=teams, groups=groups, per_group=teams // groups,
                                advance_per_group=2, seed=seed)
         return await orch.start(cfg)
@@ -40,6 +41,11 @@ async def test_tournament_completes():
     assert phases.count(Phase.FINAL) == 1
     assert phases.count(Phase.THIRD_PLACE) == 1
     assert all(len(table) == 4 for table in t.standings.values())
+
+    # The agentic event bus captured the run's activity.
+    activity = await get_deps().events.history(t.id)
+    types = {a["type"] for a in activity}
+    assert {"run_started", "phase", "match", "run_finished"} <= types
 
 
 @pytest.mark.asyncio

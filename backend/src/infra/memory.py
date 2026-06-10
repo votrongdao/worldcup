@@ -22,6 +22,14 @@ class InMemoryBackend:
         self._streams: dict[str, list[DomainEvent]] = {}
         self._store: dict[str, Tournament] = {}
         self._frames: dict[str, list[dict]] = {}
+        self._events_log: dict[str, list[dict]] = {}
+
+    # --- EventBus ------------------------------------------------------
+    async def emit(self, topic: str, event: dict) -> None:
+        self._events_log.setdefault(topic, []).append(event)
+
+    async def history(self, topic: str, limit: int = 200) -> list[dict]:
+        return list(self._events_log.get(topic, []))[-limit:]
 
     # --- MatchQueue ----------------------------------------------------
     async def enqueue(self, req: MatchRequest) -> None:
