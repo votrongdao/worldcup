@@ -3,10 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from src.app.deps import get_deps
-from src.domain.tournament import Tournament
-from src.match_engine.replay import generate_frames
+from src.domain.match import MatchRequest, MatchRules
+from src.domain.tournament import Phase, Tournament
+from src.match_engine.engine import MatchEngine
 from src.orchestrator.fsm import TournamentOrchestrator
 from src.seed.provider import sub_seed
+
+_engine = MatchEngine()
 from .schemas import (
     BracketSlotDTO,
     CoachDTO,
@@ -103,7 +106,8 @@ async def get_matches(tid: str):
 
 @router.get("/{tid}/matches/{mid}/replay")
 async def get_replay(tid: str, mid: str):
-    """Generate animated pitch frames for a match, consistent with its scoreline."""
+    """Re-run the deterministic engine WITH frame capture — frames are consistent with
+    the recorded scoreline because the same seed/rules reproduce the same match."""
     t = await _load(tid)
     summ = t.results.get(mid)
     if summ is None:
@@ -112,23 +116,21 @@ async def get_replay(tid: str, mid: str):
     if home is None or away is None:
         raise HTTPException(status_code=404, detail="teams not found")
 
-    events = await get_deps().log.read(mid)
-    goals: list[tuple[float, str]] = []
-    for e in events:
-        d = e.model_dump() if hasattr(e, "model_dump") else e
-        if d.get("type") == "goal" and d.get("team") in ("home", "away"):
-            goals.append((float(d.get("t", 0.0)), d["team"]))
-
-    duration = 120.0 if summ.decided_by in ("extra_time", "penalties") else 90.0
-    seed = sub_seed(t.config.seed, "match", mid)
-    frames = generate_frames(home, away, seed, goals, duration)
+    knockout = summ.phase is not Phase.GROUP
+    req = MatchRequest(
+        match_id=mid, home=home, away=away,
+        seed=sub_seed(t.config.seed, "match", mid),
+        rules=MatchRules(duration=90.0, extra_time=knockout, penalties=knockout),
+    )
+    result = _engine.simulate(req, capture_frames=True)
+    duration = 120.0 if result.decided_by in ("extra_time", "penalties") else 90.0
     return {
         "matchId": mid, "homeId": summ.home_id, "awayId": summ.away_id,
         "homeNation": home.nation, "awayNation": away.nation,
-        "scoreHome": summ.score_home, "scoreAway": summ.score_away,
-        "decidedBy": summ.decided_by,
+        "scoreHome": result.score_home, "scoreAway": result.score_away,
+        "decidedBy": result.decided_by,
         "homeColors": home.colors, "awayColors": away.colors,
-        "duration": duration, "frames": frames,
+        "duration": duration, "frames": result.frames,
     }
 
 

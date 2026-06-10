@@ -297,3 +297,26 @@ WS5 ≈ 1–2 · WS6 ≈ 2–3. Total ≈ 16–23 days.
 Work is tracked as one PR per workstream into `dev`:
 `feat/ws1-engine-v2`, `feat/ws2-agentic-core`, `feat/ws3-rules`, `feat/ws4-live`,
 `feat/ws5-pause-resume`, `feat/ws6-cloud-ci`. This document is updated as WSs land.
+
+---
+
+## 8. Progress log
+
+### WS1 — Match Engine v2 · **in progress** (core landed)
+- ✅ `tactics.py` (English formations + styles, `StyleDNA → style` resolver).
+- ✅ `world.py` (Player/Ball/TeamState/World bodies, shots/possession counters).
+- ✅ `physics.py` (arrive-steering, separation, ball roll, goal/out detection, **GK shot-stop + smother**).
+- ✅ `behaviors.py` (carrier shoot/pass/dribble utilities, off-ball runs/overlap, marking, GK, kicks, offside).
+- ✅ `runtime.py` (fixed-timestep loop, tackles/fouls/cards/send-off, dead-ball, penalties, coach loop,
+  half-time switch, **extra time + shootout**, event + frame capture).
+- ✅ `engine.py` `simulate(req, capture_frames=…)` — replaces the chance model.
+- ✅ Replay endpoint re-runs the engine with frame capture (frames now match the score by construction);
+  old choreographer `replay.py` deleted → **layering gap #10 closed** (api no longer needs the choreographer).
+- ✅ Tests: `test_engine.py` (determinism, frame bounds, decisive KO, plausibility); e2e + suite green (8/8).
+- ⏳ **Realism tuning (knob, not a blocker):** currently ~2.2 goals/team (target 1.3–1.6). Levers in play:
+  GK reach, shot spread, `SHOOT_R`. Tracked for follow-up; deterministic + emergent behaviour is achieved.
+- ⏳ Golden-master baseline record; headless perf budget assertion in CI.
+
+**Perf:** ~0.6 s/match headless (≈0.6 s × 63 ≈ 40 s sequential; ~15–25 s in Docker with 4 workers).
+
+### WS2–WS6 — not started.

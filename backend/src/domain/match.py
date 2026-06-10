@@ -47,6 +47,7 @@ class MatchResult(BaseModel):
     winner: Optional[Literal["home", "away"]]
     events: list[MatchEvent] = []
     stats: MatchStats = MatchStats()
+    frames: list[dict] = []          # populated only when frame capture is requested
 
 
 class Action(BaseModel):

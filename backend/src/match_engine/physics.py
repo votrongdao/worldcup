@@ -1,83 +1,134 @@
-"""Deterministic 2D pitch physics: steering, integration, bounds, goal detection.
+"""Deterministic 2D pitch physics: arrive-steering, separation, ball, goal detection.
 
-Pure helpers (no I/O, no global state) used by the replay choreographer and the
-team policies. The pitch is 105 x 68 metres; home attacks toward x = 105, away
-toward x = 0. Goal mouth spans y in [30.34, 37.66] (a 7.32 m goal).
+Pure functions over the World. Pitch is 105 x 68 m; home (dir +1) attacks toward
+x=105, away (dir -1) toward x=0. Goal mouth spans 7.32 m centred on y=34.
 """
 from __future__ import annotations
 import math
-from dataclasses import dataclass
+
+from .world import World
 
 FIELD_L = 105.0
 FIELD_W = 68.0
-GOAL_Y0 = 30.34
-GOAL_Y1 = 37.66
-
-
-@dataclass
-class Body:
-    """A moving point (player or ball) with position and velocity."""
-    x: float
-    y: float
-    vx: float = 0.0
-    vy: float = 0.0
+GOAL_W = 7.32
+BOX_D = 16.5
+BOX_W = 40.3
+PEN_SPOT = 11.0
+PAD = 1.5
+GOAL_Y0 = FIELD_W / 2 - GOAL_W / 2
+GOAL_Y1 = FIELD_W / 2 + GOAL_W / 2
 
 
 def clamp(v: float, lo: float, hi: float) -> float:
     return lo if v < lo else hi if v > hi else v
 
 
-def clamp_to_field(x: float, y: float, margin: float = 0.0) -> tuple[float, float]:
-    return clamp(x, -margin, FIELD_L + margin), clamp(y, 0.0, FIELD_W)
-
-
 def dist(ax: float, ay: float, bx: float, by: float) -> float:
     return math.hypot(ax - bx, ay - by)
 
 
-def steer(body: Body, tx: float, ty: float, max_speed: float, accel: float,
-          dt: float) -> None:
-    """Accelerate a body toward (tx, ty) up to max_speed, then integrate one step.
-
-    Velocity is nudged toward the desired heading (acceleration limit), capped at
-    max_speed, and position advanced by dt. Mutates ``body`` in place.
-    """
-    dx, dy = tx - body.x, ty - body.y
-    d = math.hypot(dx, dy)
-    if d < 1e-6:
-        desired_vx = desired_vy = 0.0
-    else:
-        speed = min(max_speed, d / dt)        # ease in as the target nears
-        desired_vx = dx / d * speed
-        desired_vy = dy / d * speed
-    body.vx += clamp(desired_vx - body.vx, -accel * dt, accel * dt)
-    body.vy += clamp(desired_vy - body.vy, -accel * dt, accel * dt)
-    body.x += body.vx * dt
-    body.y += body.vy * dt
-    body.x, body.y = clamp_to_field(body.x, body.y, margin=1.5)
+def seg_dist(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
+    """Distance from point P to segment AB (for pass-lane / interception checks)."""
+    dx, dy = bx - ax, by - ay
+    l2 = dx * dx + dy * dy or 1e-6
+    t = clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0.0, 1.0)
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
 
-def roll_ball(ball: Body, dt: float, friction: float = 0.94) -> None:
-    """Advance a free ball with rolling friction (mutates in place)."""
-    ball.x += ball.vx * dt
-    ball.y += ball.vy * dt
-    ball.vx *= friction
-    ball.vy *= friction
-    ball.x, ball.y = clamp_to_field(ball.x, ball.y)
+def step_players(world: World, dt: float) -> None:
+    bodies = [p for t in world.teams for p in world.active(t)]
+    # Arrive-steering: accelerate toward target, cap speed, integrate.
+    for p in bodies:
+        dx, dy = p.tx - p.x, p.ty - p.y
+        d = math.hypot(dx, dy) or 1e-6
+        desired = min(p.mv, d * 3.2)
+        dvx, dvy = dx / d * desired - p.vx, dy / d * desired - p.vy
+        dl = math.hypot(dvx, dvy) or 1e-6
+        a = min(p.accel * dt, dl)
+        p.vx += dvx / dl * a
+        p.vy += dvy / dl * a
+        sp = math.hypot(p.vx, p.vy)
+        if sp > p.mv:
+            p.vx, p.vy = p.vx / sp * p.mv, p.vy / sp * p.mv
+        p.x += p.vx * dt
+        p.y += p.vy * dt
+        p.x, p.y = clamp(p.x, PAD, FIELD_L - PAD), clamp(p.y, PAD, FIELD_W - PAD)
+    # Player–player separation (positional, no velocity kill).
+    n = len(bodies)
+    for i in range(n):
+        a = bodies[i]
+        for j in range(i + 1, n):
+            b = bodies[j]
+            dx, dy = b.x - a.x, b.y - a.y
+            d = math.hypot(dx, dy)
+            mn = a.r + b.r
+            if 1e-4 < d < mn:
+                ov, nx, ny = (mn - d) / 2, dx / d, dy / d
+                a.x -= nx * ov; a.y -= ny * ov
+                b.x += nx * ov; b.y += ny * ov
 
 
-def kick(ball: Body, tx: float, ty: float, power: float) -> None:
-    """Set the ball's velocity toward a target at the given power (m/s)."""
-    dx, dy = tx - ball.x, ty - ball.y
-    d = math.hypot(dx, dy) or 1.0
-    ball.vx = dx / d * power
-    ball.vy = dy / d * power
-
-
-def in_goal_mouth(y: float) -> bool:
+def in_goal_y(y: float) -> bool:
     return GOAL_Y0 <= y <= GOAL_Y1
 
 
-def attack_goal(side: str) -> tuple[float, float]:
-    """The goal a side is shooting at."""
-    return (FIELD_L, FIELD_W / 2) if side == "home" else (0.0, FIELD_W / 2)
+def step_ball(world: World, dt: float) -> str | None:
+    """Advance the ball. Returns "goal_home"/"goal_away"/"out_left"/"out_right"/"out_y"
+    or None. A dribbling carrier keeps the ball just ahead of them."""
+    ball = world.ball
+    if world.state != "play":
+        return None
+    if ball.kick_lock > 0:
+        ball.kick_lock -= dt
+
+    if ball.carrier is not None:
+        c = ball.carrier
+        hx, hy = c.vx, c.vy
+        hs = math.hypot(hx, hy)
+        if hs < 0.6:
+            hx, hy = float(c.dir), 0.0
+        else:
+            hx, hy = hx / hs, hy / hs
+        cpx, cpy = c.x + hx * 1.0, c.y + hy * 1.0
+        ball.vx = (cpx - ball.x) / dt * 0.45
+        ball.vy = (cpy - ball.y) / dt * 0.45
+        ball.x += ball.vx * dt
+        ball.y += ball.vy * dt
+        return None
+
+    ball.x += ball.vx * dt
+    ball.y += ball.vy * dt
+    damp = 0.62 ** dt
+    ball.vx *= damp
+    ball.vy *= damp
+    if ball.y < PAD:
+        ball.y, ball.vy = PAD, -ball.vy * 0.55
+    elif ball.y > FIELD_W - PAD:
+        ball.y, ball.vy = FIELD_W - PAD, -ball.vy * 0.55
+
+    # Goalkeeper shot-stop: a fast ball near a goal that the defending GK can reach is
+    # saved (controlled). Reach scales with GK quality. This keeps conversion realistic
+    # despite the coarse timestep (a 30 m/s shot would otherwise blow past the keeper).
+    speed = math.hypot(ball.vx, ball.vy)
+    if speed > 5:
+        defend = None
+        if ball.vx < 0 and ball.x < 22:
+            defend = world.teams[0]
+        elif ball.vx > 0 and ball.x > FIELD_L - 22:
+            defend = world.teams[1]
+        if defend is not None:
+            gk = next((p for p in world.active(defend) if p.role == "GK"), None)
+            if gk is not None:
+                reach = 4.3 + gk.skill * 2.6 + gk.r
+                if math.hypot(gk.x - ball.x, gk.y - ball.y) < reach:
+                    ball.carrier = gk
+                    ball.vx *= 0.12
+                    ball.vy *= 0.12
+                    ball.last_kick = gk
+                    return "save"
+
+    if ball.x <= 0.4:
+        return "goal_away" if in_goal_y(ball.y) else "out_left"
+    if ball.x >= FIELD_L - 0.4:
+        return "goal_home" if in_goal_y(ball.y) else "out_right"
+    return None
