@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useBracket } from "../../hooks/useBracket";
 import { useTeamNames } from "../../hooks/useTeams";
 import type { BracketSlot, Phase } from "../../api/types";
@@ -25,11 +26,16 @@ export function BracketView({ tournamentId }: { tournamentId: string }) {
           <div className="card bracket-round" key={phase}>
             <h3>{label}</h3>
             {ties.map((tie: BracketSlot) => (
-              <div className="bracket-tie" key={tie.matchId}>
+              <Link
+                className="bracket-tie" key={tie.matchId}
+                to="/tournaments/$id/matches/$mid"
+                params={{ id: tournamentId, mid: tie.matchId }}
+                style={{ display: "block", color: "inherit" }}
+              >
                 <span className={tie.winnerId === tie.homeId ? "win" : ""}>{name(tie.homeId)}</span>
                 {" v "}
                 <span className={tie.winnerId === tie.awayId ? "win" : ""}>{name(tie.awayId)}</span>
-              </div>
+              </Link>
             ))}
           </div>
         );

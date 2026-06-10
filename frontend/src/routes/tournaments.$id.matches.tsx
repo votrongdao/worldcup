@@ -1,34 +1,21 @@
-import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useMatches, useCommentary } from "../hooks/useMatches";
+import { useMatches } from "../hooks/useMatches";
 import { useTeamNames } from "../hooks/useTeams";
-import type { MatchSummary } from "../api/types";
+import type { MatchSummary, Phase } from "../api/types";
 
-function MatchRow({ m, name }: { m: MatchSummary; name: (id?: string | null) => string }) {
-  const [show, setShow] = useState(false);
-  const { data, isFetching } = useCommentary(m.matchId, show);
-  const decided = m.decidedBy === "regulation" ? "" : ` (${m.decidedBy.replace("_", " ")})`;
-  return (
-    <div className="card">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <span>
-          <strong>{name(m.homeId)}</strong> {m.scoreHome} – {m.scoreAway}{" "}
-          <strong>{name(m.awayId)}</strong>
-          <span className="muted">{decided}</span>
-        </span>
-        <button className="ghost" onClick={() => setShow(true)} disabled={show}>
-          {isFetching ? "Thinking…" : "AI commentary"}
-        </button>
-      </div>
-      {data?.commentary && <p className="commentary">“{data.commentary}”</p>}
-    </div>
-  );
-}
+const PHASE_LABEL: Record<string, string> = {
+  group: "Group stage", r16: "Round of 16", qf: "Quarter-finals",
+  sf: "Semi-finals", final: "Final",
+};
+const ORDER: Phase[] = ["group", "r16", "qf", "sf", "final"];
 
 export function MatchesPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const { data: matches = [], isLoading } = useMatches(id);
   const name = useTeamNames(id);
+
+  const byPhase: Record<string, MatchSummary[]> = {};
+  for (const m of matches) (byPhase[m.phase] ??= []).push(m);
 
   return (
     <section>
@@ -36,11 +23,31 @@ export function MatchesPage() {
         <Link to="/tournaments/$id" params={{ id }}>← Overview</Link>
         <Link to="/tournaments/$id/groups" params={{ id }}>Groups</Link>
         <Link to="/tournaments/$id/bracket" params={{ id }}>Bracket</Link>
+        <Link to="/tournaments/$id/teams" params={{ id }}>Teams</Link>
       </nav>
       <h2>Matches ({matches.length})</h2>
       {isLoading && <p className="muted">Loading…</p>}
-      {matches.map((m) => (
-        <MatchRow key={m.matchId} m={m} name={name} />
+
+      {ORDER.filter((p) => byPhase[p]).map((p) => (
+        <div key={p}>
+          <h3>{PHASE_LABEL[p] ?? p}</h3>
+          {byPhase[p].map((m) => {
+            const decided = m.decidedBy === "regulation" ? "" : ` · ${m.decidedBy.replace("_", " ")}`;
+            return (
+              <Link
+                key={m.matchId}
+                to="/tournaments/$id/matches/$mid"
+                params={{ id, mid: m.matchId }}
+                className="match-link"
+              >
+                <span>{name(m.homeId)}</span>
+                <strong>{m.scoreHome} – {m.scoreAway}</strong>
+                <span>{name(m.awayId)}</span>
+                <span className="muted">{decided} ▸</span>
+              </Link>
+            );
+          })}
+        </div>
       ))}
     </section>
   );
