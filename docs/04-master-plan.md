@@ -348,4 +348,17 @@ Work is tracked as one PR per workstream into `dev`:
   events are emitted for observability and to feed the live UI (WS4), rather than rewriting the
   conductor into a fully event-driven reactor. The bus/registry/blackboard substrate is now real.
 
-### WS4–WS6 — not started.
+### WS4 — Live viewing · **done**
+- ✅ **WebSocket** `/ws/match/{tid}/{mid}` (local SignalR stand-in): re-runs the engine with frame
+  capture and streams frames **paced in real time** (~35 s/match) with live score + clock + meta
+  (English formation/style per team). Engine runs in a thread so the event loop isn't blocked.
+- ✅ `negotiate` returns the WS url locally (SignalR token in `azure`).
+- ✅ nginx fixed to proxy WebSocket upgrades (`Upgrade`/`Connection` map) while keeping the
+  resolver-based re-resolution — verified WS works **through the proxy**.
+- ✅ Frontend: `realtime/ws.ts` client, **`CoachPanel`** HUD (formations/styles in English, live
+  score + clock — ported from `match.html`), `LiveMatch` canvas renderer, and a **Live ⇄ Replay**
+  toggle on the match page.
+- ✅ Verified in Docker: live stream over nginx (e.g. *Brazil (Possession Attack) vs Italy (Tiki-Taka)*)
+  with streaming frames and running score. **Live-frame gap (#7) closed locally.**
+
+### WS5–WS6 — not started.

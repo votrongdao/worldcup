@@ -4,6 +4,7 @@ import { useReplay } from "../hooks/useReplay";
 import { useMatchEvents } from "../hooks/useMatchEvents";
 import { useCommentary } from "../hooks/useMatches";
 import { PitchReplay } from "../components/match/PitchReplay";
+import { LiveMatch } from "../components/match/LiveMatch";
 
 const TIMELINE_TYPES = new Set(["goal", "penalty", "et_start", "fulltime", "end"]);
 
@@ -12,6 +13,7 @@ export function MatchDetail() {
   const { data, isLoading } = useReplay(id, mid);
   const { data: events = [] } = useMatchEvents(mid);
   const [showC, setShowC] = useState(false);
+  const [mode, setMode] = useState<"replay" | "live">("replay");
   const com = useCommentary(mid, showC);
 
   const timeline = events.filter((e) => TIMELINE_TYPES.has(e.type));
@@ -35,8 +37,19 @@ export function MatchDetail() {
         </p>
       )}
 
-      {isLoading && <p className="muted">Generating replay…</p>}
-      {data && <PitchReplay frames={data.frames} duration={data.duration} />}
+      <div className="seg">
+        <button className={mode === "replay" ? "on" : ""} onClick={() => setMode("replay")}>⟲ Replay</button>
+        <button className={mode === "live" ? "on" : ""} onClick={() => setMode("live")}>● Watch live</button>
+      </div>
+
+      {mode === "live" ? (
+        <LiveMatch tid={id} mid={mid} />
+      ) : (
+        <>
+          {isLoading && <p className="muted">Generating replay…</p>}
+          {data && <PitchReplay frames={data.frames} duration={data.duration} />}
+        </>
+      )}
 
       <div className="row" style={{ marginTop: 12 }}>
         <button className="ghost" onClick={() => setShowC(true)} disabled={showC}>

@@ -150,3 +150,27 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .trait .bar > div { height: 100%; background: var(--accent); }
 .radar { display: block; margin: 4px auto; }
 .team-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; }
+
+/* --- Live match --- */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 8px 0; }
+.seg button { background: var(--card); color: var(--ink); border: none; border-radius: 0; padding: 7px 14px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.coach-hud {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 14px; margin-bottom: 8px;
+}
+.coach-hud .team-tac { font-size: 0.85rem; }
+.coach-hud .team-tac.away { text-align: right; }
+.coach-hud .nat { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.coach-hud .team-tac.away .nat { justify-content: flex-end; }
+.coach-hud .tac { color: var(--muted); font-size: 0.78rem; }
+.coach-hud .hud-mid { text-align: center; }
+.coach-hud .score { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.coach-hud .clock { color: var(--muted); font-size: 0.8rem; }
+.live-status { text-align: center; margin-top: 6px; font-size: 0.85rem; font-weight: 600; }
+.live-status.live { color: #e53e3e; }
+.live-status.ended { color: var(--muted); }
+.coach-hud .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.coach-hud .dot.home { background: #2b6cb0; }
+.coach-hud .dot.away { background: #e53e3e; }
