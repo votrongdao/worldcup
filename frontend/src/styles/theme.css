@@ -1,0 +1,107 @@
+:root {
+  --bg: #f7faf7;
+  --card: #ffffff;
+  --line: #e3e9e3;
+  --ink: #1b241b;
+  --muted: #6b756b;
+  --accent: #2bb673;
+  --accent2: #ff7a18;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.navbar a { color: #fff; }
+
+main { max-width: 980px; margin: 0 auto; padding: 24px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 24px 0 8px; }
+h3 { font-size: 0.95rem; margin: 16px 0 6px; color: var(--muted); }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  min-width: 0;            /* let the card shrink inside the grid instead of overflowing */
+  overflow: hidden;
+}
+
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.subnav { display: flex; gap: 16px; margin: 12px 0; }
+.muted { color: var(--muted); font-size: 0.85rem; }
+
+input, button {
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+button:hover { filter: brightness(1.05); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Compact group standings: fixed layout so columns never overflow the card. */
+.standings { table-layout: fixed; font-size: 0.84rem; }
+.standings th, .standings td { padding: 5px 4px; }
+.standings th.num, .standings td.num { width: 30px; }
+.standings th:first-child, .standings .team {
+  width: auto; max-width: 0;            /* with table-layout:fixed, lets ellipsis work */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.standings tr.qualified td { font-weight: 700; }
+.standings tr.qualified td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px;
+}
+.standings td.pts { color: var(--accent); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.phase-stepper { display: flex; gap: 8px; list-style: none; padding: 0; flex-wrap: wrap; }
+.phase-stepper li {
+  padding: 4px 10px; border-radius: 999px; background: #eef3ee; color: var(--muted);
+  font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.4px;
+}
+.phase-stepper li.active { background: var(--accent); color: #fff; }
+
+.bracket-round { margin-bottom: 8px; }
+.bracket-tie { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.bracket-tie .win { font-weight: 700; color: var(--accent); }
+
+.champion { font-size: 1.1rem; font-weight: 700; color: var(--accent2); }
+.pitch { width: 100%; height: 70vh; display: block; }
+.commentary { font-style: italic; color: var(--ink); margin-top: 6px; }

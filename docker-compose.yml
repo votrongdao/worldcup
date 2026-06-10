@@ -1,0 +1,101 @@
+# AI Agentic World Cup — full local stack.
+#   docker compose up --build        (or run .\run-local.ps1)
+#
+# Services: postgres + redis + azurite (Azure-equivalent infra), the FastAPI api,
+# a match worker (queue consumer), and the nginx-served React frontend.
+# All backend config is via WC_* env vars; AI Foundry settings come from .env.
+
+name: worldcup
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: worldcup
+      POSTGRES_PASSWORD: worldcup
+      POSTGRES_DB: worldcup
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U worldcup"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    command: azurite --blobHost 0.0.0.0 --loose --skipApiVersionCheck
+    ports:
+      - "10000:10000"   # blob
+      - "10001:10001"   # queue
+      - "10002:10002"   # table
+    volumes:
+      - azurite:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "10000"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      WC_BACKEND: local
+      WC_REDIS_URL: redis://redis:6379/0
+      WC_PG_DSN: postgresql+asyncpg://worldcup:worldcup@postgres:5432/worldcup
+      WC_BLOB_CONN: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+    env_file:
+      - path: .env    # WC_AOAI_* / WC_LLM_ENABLED (AI Foundry)
+        required: false
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      azurite: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "src.workers.main"]
+    environment:
+      WC_BACKEND: local
+      WC_WORKER_CONCURRENCY: "4"
+      WC_REDIS_URL: redis://redis:6379/0
+      WC_PG_DSN: postgresql+asyncpg://worldcup:worldcup@postgres:5432/worldcup
+      WC_BLOB_CONN: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      azurite: { condition: service_healthy }
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  azurite:
