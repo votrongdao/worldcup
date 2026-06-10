@@ -7,10 +7,13 @@ from src.domain.tournament import Tournament
 from src.orchestrator.fsm import TournamentOrchestrator
 from .schemas import (
     BracketSlotDTO,
+    CoachDTO,
     CreateTournamentRequest,
     CreateTournamentResponse,
     MatchSummaryDTO,
+    PlayerDTO,
     StandingDTO,
+    TeamDetailDTO,
     TeamSummaryDTO,
     TournamentStatus,
 )
@@ -69,6 +72,25 @@ async def get_teams(tid: str):
         )
         for tm in t.teams.values()
     ]
+
+
+@router.get("/{tid}/teams/{team_id}", response_model=TeamDetailDTO)
+async def get_team_detail(tid: str, team_id: str):
+    t = await _load(tid)
+    tm = t.teams.get(team_id)
+    if tm is None:
+        raise HTTPException(status_code=404, detail=f"team {team_id} not found")
+    return TeamDetailDTO(
+        id=tm.id, nation=tm.nation, tier=tm.tier, rating=tm.rating,
+        style_dna=tm.style_dna.value, group=t.group_of.get(tm.id, ""),
+        xi=tm.xi, colors=tm.colors,
+        coach=CoachDTO(
+            formation=tm.coach.formation.value, aggression=tm.coach.aggression,
+            line_height=tm.coach.line_height, tempo=tm.coach.tempo,
+            pressing=tm.coach.pressing, directness=tm.coach.directness),
+        squad=[PlayerDTO(role=p.role.value, **p.model_dump(exclude={"role", "mass"}))
+               for p in tm.squad],
+    )
 
 
 @router.get("/{tid}/matches", response_model=list[MatchSummaryDTO])

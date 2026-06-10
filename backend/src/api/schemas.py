@@ -70,3 +70,45 @@ class BracketSlotDTO(CamelModel):
     home_id: Optional[str] = None
     away_id: Optional[str] = None
     winner_id: Optional[str] = None
+
+
+class PlayerDTO(CamelModel):
+    id: str
+    role: str
+    pace: float
+    accel: float
+    shooting: float
+    passing: float
+    dribbling: float
+    vision: float
+    defending: float
+    stamina: float
+    teamwork: float
+
+
+class CoachDTO(CamelModel):
+    formation: str
+    aggression: float
+    line_height: float
+    tempo: float
+    pressing: float
+    directness: float
+
+
+class TeamDetailDTO(CamelModel):
+    id: str
+    nation: str
+    tier: int
+    rating: float
+    style_dna: str
+    group: str = ""
+    xi: list[str]
+    squad: list[PlayerDTO]
+    coach: CoachDTO
+    colors: dict[str, str] = {}
+
+
+class AiTextDTO(CamelModel):
+    text: str
+    cached: bool = False
+
