@@ -4,7 +4,9 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from src.app.deps import get_deps
 from src.domain.tournament import Tournament
+from src.match_engine.replay import generate_frames
 from src.orchestrator.fsm import TournamentOrchestrator
+from src.seed.provider import sub_seed
 from .schemas import (
     BracketSlotDTO,
     CoachDTO,
@@ -97,6 +99,37 @@ async def get_team_detail(tid: str, team_id: str):
 async def get_matches(tid: str):
     t = await _load(tid)
     return [MatchSummaryDTO(**s.model_dump()) for s in t.results.values()]
+
+
+@router.get("/{tid}/matches/{mid}/replay")
+async def get_replay(tid: str, mid: str):
+    """Generate animated pitch frames for a match, consistent with its scoreline."""
+    t = await _load(tid)
+    summ = t.results.get(mid)
+    if summ is None:
+        raise HTTPException(status_code=404, detail=f"match {mid} not found")
+    home, away = t.teams.get(summ.home_id), t.teams.get(summ.away_id)
+    if home is None or away is None:
+        raise HTTPException(status_code=404, detail="teams not found")
+
+    events = await get_deps().log.read(mid)
+    goals: list[tuple[float, str]] = []
+    for e in events:
+        d = e.model_dump() if hasattr(e, "model_dump") else e
+        if d.get("type") == "goal" and d.get("team") in ("home", "away"):
+            goals.append((float(d.get("t", 0.0)), d["team"]))
+
+    duration = 120.0 if summ.decided_by in ("extra_time", "penalties") else 90.0
+    seed = sub_seed(t.config.seed, "match", mid)
+    frames = generate_frames(home, away, seed, goals, duration)
+    return {
+        "matchId": mid, "homeId": summ.home_id, "awayId": summ.away_id,
+        "homeNation": home.nation, "awayNation": away.nation,
+        "scoreHome": summ.score_home, "scoreAway": summ.score_away,
+        "decidedBy": summ.decided_by,
+        "homeColors": home.colors, "awayColors": away.colors,
+        "duration": duration, "frames": frames,
+    }
 
 
 @router.post("/{tid}/pause")
