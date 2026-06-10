@@ -20,8 +20,10 @@ from src.seed.provider import sub_seed
 router = APIRouter(tags=["stream"])
 _engine = MatchEngine()
 
-_MIN_PER_REALSEC = 2.6     # sim-minutes streamed per real second (~35 s per match)
-_MAX_STEP = 0.4           # cap per-frame sleep so it never stalls
+_MIN_PER_REALSEC = 2.6     # sim-minutes streamed per real second at 1x (~35 s/match)
+_MAX_STEP = 1.0           # cap per-frame sleep so it never stalls (allows slow-mo)
+_SPEED_MIN = 0.3
+_SPEED_MAX = 2.0
 
 
 @router.post("/negotiate")
@@ -60,6 +62,20 @@ async def ws_match(ws: WebSocket, tid: str, mid: str) -> None:
     result = await asyncio.to_thread(_engine.simulate, req, True)
     goals = sorted((e.t, e.team) for e in result.events if e.type.value == "goal")
 
+    # Playback speed is adjustable live: a concurrent reader updates `speed` from the
+    # client's {"type":"speed","value":x} control messages (clamped to [0.3, 2.0]).
+    speed = {"v": 1.0}
+
+    async def _read_controls() -> None:
+        try:
+            while True:
+                msg = await ws.receive_json()
+                if isinstance(msg, dict) and msg.get("type") == "speed":
+                    speed["v"] = max(_SPEED_MIN, min(_SPEED_MAX, float(msg.get("value", 1.0))))
+        except Exception:
+            pass
+
+    reader = asyncio.create_task(_read_controls())
     try:
         await ws.send_json({
             "type": "meta", "matchId": mid,
@@ -69,7 +85,7 @@ async def ws_match(ws: WebSocket, tid: str, mid: str) -> None:
         })
         prev = 0.0
         for fr in result.frames:
-            gap = (fr["t"] - prev) / _MIN_PER_REALSEC
+            gap = (fr["t"] - prev) / (_MIN_PER_REALSEC * speed["v"])
             prev = fr["t"]
             if gap > 0:
                 await asyncio.sleep(min(gap, _MAX_STEP))
@@ -84,6 +100,7 @@ async def ws_match(ws: WebSocket, tid: str, mid: str) -> None:
     except Exception:
         pass
     finally:
+        reader.cancel()
         try:
             await ws.close()
         except Exception:

@@ -358,6 +358,9 @@ Work is tracked as one PR per workstream into `dev`:
 - ✅ Frontend: `realtime/ws.ts` client, **`CoachPanel`** HUD (formations/styles in English, live
   score + clock — ported from `match.html`), `LiveMatch` canvas renderer, and a **Live ⇄ Replay**
   toggle on the match page.
+- ✅ **Adjustable game speed 0.3×–2×**: the live view sends `{type:"speed"}` control messages over the
+  WS; a concurrent reader retunes the server's pacing (verified 0.3×→3 fps, 1×→8 fps, 2×→15 fps).
+  The replay scrubber's speed options were aligned to the same 0.3×–2× range.
 - ✅ Verified in Docker: live stream over nginx (e.g. *Brazil (Possession Attack) vs Italy (Tiki-Taka)*)
   with streaming frames and running score. **Live-frame gap (#7) closed locally.**
 

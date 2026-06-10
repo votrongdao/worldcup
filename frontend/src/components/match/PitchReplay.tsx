@@ -64,10 +64,11 @@ export function PitchReplay({ frames, duration }: { frames: Frame[]; duration: n
         />
         <span className="clock">{Math.floor(t)}'</span>
         <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+          <option value={0.3}>0.3×</option>
           <option value={0.5}>0.5×</option>
           <option value={1}>1×</option>
+          <option value={1.5}>1.5×</option>
           <option value={2}>2×</option>
-          <option value={4}>4×</option>
         </select>
       </div>
       <div className="legend">
