@@ -1,5 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useTeams } from "../hooks/useTeams";
+import { TeamBadge } from "../components/common/TeamBadge";
 import type { TeamSummary } from "../api/types";
 
 export function TeamsPage() {
@@ -12,21 +13,34 @@ export function TeamsPage() {
   return (
     <section>
       <nav className="subnav">
-        <Link to="/tournaments/$id" params={{ id }}>← Overview</Link>
+        <Link to="/tournaments/$id" params={{ id }} className="back">← Overview</Link>
+        <Link to="/tournaments/$id/groups" params={{ id }}>⚽ Groups</Link>
+        <Link to="/tournaments/$id/bracket" params={{ id }}>🏆 Bracket</Link>
       </nav>
-      <h2>Teams</h2>
-      {isLoading && <p className="muted">Loading…</p>}
+
+      <h1>Teams <span className="chip" style={{ verticalAlign: "middle" }}>{teams.length}</span></h1>
+      {isLoading && <p className="muted"><span className="spinner" />Loading…</p>}
+
       <div className="grid">
         {Object.entries(byGroup).sort(([a], [b]) => a.localeCompare(b)).map(([g, list]) => (
-          <div className="card" key={g}>
-            <h3>Group {g}</h3>
+          <div className="card group-card hoverable" key={g}>
+            <h3><span className="g-tag">{g}</span> Group {g}</h3>
             {list.map((t) => (
-              <div key={t.id} className="team-row">
-                <Link to="/tournaments/$id/teams/$teamId" params={{ id, teamId: t.id }}>
-                  {t.nation}
-                </Link>
-                <span className="muted">T{t.tier} · {t.styleDna.replace("_", " ")}</span>
-              </div>
+              <Link
+                key={t.id}
+                to="/tournaments/$id/teams/$teamId"
+                params={{ id, teamId: t.id }}
+                className="team-card-link"
+              >
+                <div className="team-row">
+                  <TeamBadge name={t.nation} size="sm" />
+                  <span className="name">{t.nation}</span>
+                  <span className="chip tier">T{t.tier}</span>
+                  <span className="muted" style={{ fontSize: ".74rem" }}>
+                    {t.styleDna.replace("_", " ")}
+                  </span>
+                </div>
+              </Link>
             ))}
           </div>
         ))}

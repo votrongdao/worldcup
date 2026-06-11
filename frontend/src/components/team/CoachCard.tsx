@@ -8,15 +8,19 @@ const TRAITS: [keyof CoachDetail, string][] = [
 export function CoachCard({ coach }: { coach: CoachDetail }) {
   return (
     <div className="card">
-      <h3>Coach · {coach.formation}</h3>
-      {TRAITS.map(([k, label]) => (
-        <div className="trait" key={k}>
-          <span>{label}</span>
-          <div className="bar">
-            <div style={{ width: `${(coach[k] as number) * 100}%` }} />
+      <h3>🎯 Coach · {coach.formation}</h3>
+      {TRAITS.map(([k, label]) => {
+        const pct = Math.round((coach[k] as number) * 100);
+        return (
+          <div className="trait" key={k}>
+            <span>{label}</span>
+            <div className="bar">
+              <div style={{ width: `${pct}%` }} />
+            </div>
+            <span className="val">{pct}</span>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

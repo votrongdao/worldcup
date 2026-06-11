@@ -3,6 +3,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCreateTournament } from "../hooks/useCreateTournament";
 import { randomSeed } from "../lib/seed";
 
+const STEPS = [
+  { ic: "🌍", t: "32 AI nations", d: "Generated with squads, coaches & tactical DNA" },
+  { ic: "🎲", t: "Group draw", d: "Eight groups, seeded from your master seed" },
+  { ic: "⚽", t: "Live matches", d: "Deterministic 2D physics, watch or replay" },
+  { ic: "🏆", t: "One champion", d: "Round-robin → knockout → glory" },
+];
+
 export function Dashboard() {
   const [seed, setSeed] = useState(randomSeed());
   const create = useCreateTournament();
@@ -19,27 +26,49 @@ export function Dashboard() {
 
   return (
     <section>
-      <h1>New World Cup</h1>
-      <p className="muted">
-        Generate 32 AI nations, draw groups, and simulate the whole tournament
-        deterministically from a single seed.
-      </p>
-      <div className="card row">
-        <label>
-          Seed{" "}
-          <input
-            type="number"
-            value={seed}
-            onChange={(e) => setSeed(Number(e.target.value))}
-            style={{ width: 160 }}
-          />
-        </label>
-        <button onClick={() => setSeed(randomSeed())} className="ghost">Random</button>
-        <button onClick={start} disabled={create.isPending}>
-          {create.isPending ? "Starting…" : "Start tournament"}
-        </button>
+      <div className="hero">
+        <span className="ball-bg">⚽</span>
+        <span className="eyebrow">⚡ Deterministic · Reproducible · Agentic</span>
+        <h1>Kick off a new World Cup</h1>
+        <p className="sub">
+          Generate 32 AI nations, draw the groups, and simulate an entire
+          tournament — fully deterministic from a single master seed. Same seed,
+          same World Cup, every time.
+        </p>
       </div>
-      {create.isError && <p className="muted">Failed to start — is the API running?</p>}
+
+      <div className="card">
+        <h3>Master seed</h3>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <div className="row">
+            <input
+              type="number"
+              value={seed}
+              onChange={(e) => setSeed(Number(e.target.value))}
+              style={{ width: 200, fontFamily: "ui-monospace, monospace", fontWeight: 600 }}
+            />
+            <button onClick={() => setSeed(randomSeed())} className="ghost">🎲 Random</button>
+          </div>
+          <button onClick={start} disabled={create.isPending} className="big">
+            {create.isPending ? <><span className="spinner" />Starting…</> : "Start tournament →"}
+          </button>
+        </div>
+        {create.isError && (
+          <p className="muted" style={{ marginBottom: 0, color: "var(--away)" }}>
+            ⚠ Failed to start — is the API running?
+          </p>
+        )}
+      </div>
+
+      <div className="stat-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" }}>
+        {STEPS.map((s, i) => (
+          <div className="card hoverable" key={i} style={{ margin: 0 }}>
+            <div style={{ fontSize: "1.7rem", marginBottom: 6 }}>{s.ic}</div>
+            <div style={{ fontWeight: 700, fontFamily: "Sora, sans-serif" }}>{s.t}</div>
+            <div className="muted" style={{ marginTop: 2 }}>{s.d}</div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

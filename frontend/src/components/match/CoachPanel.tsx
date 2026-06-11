@@ -1,4 +1,5 @@
 import type { LiveMeta } from "../../realtime/ws";
+import { TeamBadge } from "../common/TeamBadge";
 
 interface Props extends LiveMeta {
   scoreHome: number;
@@ -6,13 +7,12 @@ interface Props extends LiveMeta {
   clock: number;
 }
 
-/** Live HUD (ported from match.html): per-team formation + tactical style,
-    centre score and clock. Read-only for a tournament match. */
+/** Live HUD: per-team formation + tactical style, centre score and clock. */
 export function CoachPanel(p: Props) {
   return (
     <div className="coach-hud">
       <div className="team-tac home">
-        <div className="nat"><i className="dot home" /> {p.homeNation}</div>
+        <div className="nat"><TeamBadge name={p.homeNation} size="sm" /> {p.homeNation}</div>
         <div className="tac">{p.homeFormation} · {p.homeStyle}</div>
       </div>
       <div className="hud-mid">
@@ -20,7 +20,7 @@ export function CoachPanel(p: Props) {
         <div className="clock">{Math.floor(p.clock)}'</div>
       </div>
       <div className="team-tac away">
-        <div className="nat">{p.awayNation} <i className="dot away" /></div>
+        <div className="nat">{p.awayNation} <TeamBadge name={p.awayNation} size="sm" /></div>
         <div className="tac">{p.awayFormation} · {p.awayStyle}</div>
       </div>
     </div>

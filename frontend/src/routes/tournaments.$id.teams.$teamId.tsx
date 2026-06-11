@@ -5,6 +5,7 @@ import { useReport } from "../hooks/useAi";
 import { SquadTable } from "../components/team/SquadTable";
 import { CoachCard } from "../components/team/CoachCard";
 import { PlayerRadar } from "../components/team/PlayerRadar";
+import { TeamBadge } from "../components/common/TeamBadge";
 import type { PlayerDetail } from "../api/types";
 
 function standout(squad: PlayerDetail[], xi: string[]): PlayerDetail | undefined {
@@ -22,37 +23,50 @@ export function TeamDetail() {
   const [showR, setShowR] = useState(false);
   const report = useReport(id, teamId, showR);
 
-  if (isLoading || !data) return <p className="muted">Loading team…</p>;
+  if (isLoading || !data) return <p className="muted"><span className="spinner" />Loading team…</p>;
   const star = standout(data.squad, data.xi);
 
   return (
     <section>
       <nav className="subnav">
-        <Link to="/tournaments/$id/teams" params={{ id }}>← Teams</Link>
-        {data.group && <Link to="/tournaments/$id/groups" params={{ id }}>Group {data.group}</Link>}
+        <Link to="/tournaments/$id/teams" params={{ id }} className="back">← Teams</Link>
+        {data.group && <Link to="/tournaments/$id/groups" params={{ id }}>⚽ Group {data.group}</Link>}
       </nav>
 
-      <h1>{data.nation}</h1>
-      <p className="muted">
-        Tier {data.tier} · {data.styleDna.replace("_", " ")} · {data.coach.formation}
-        {data.group ? ` · Group ${data.group}` : ""} · rating {data.rating.toFixed(2)}
-      </p>
+      <div className="team-hero">
+        <div className="top">
+          <TeamBadge name={data.nation} size="lg" />
+          <div>
+            <h1>{data.nation}</h1>
+            <div className="tags">
+              <span className="chip">Tier {data.tier}</span>
+              <span className="chip">{data.styleDna.replace("_", " ")}</span>
+              <span className="chip">{data.coach.formation}</span>
+              {data.group && <span className="chip">Group {data.group}</span>}
+              <span className="chip">★ {data.rating.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <div className="row" style={{ alignItems: "flex-start", gap: 16 }}>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
         <CoachCard coach={data.coach} />
         {star && (
           <div className="card">
-            <h3>Standout ({star.role})</h3>
+            <h3>⭐ Standout · {star.role}</h3>
             <PlayerRadar player={star} />
           </div>
         )}
       </div>
 
-      <div className="row" style={{ marginTop: 8 }}>
-        <button className="ghost" onClick={() => setShowR(true)} disabled={showR}>
-          {report.isFetching ? "Scouting…" : "🔎 AI scouting report"}
-        </button>
-        {report.data?.text && <p className="commentary" style={{ margin: 0 }}>{report.data.text}</p>}
+      <div className="card">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h3 style={{ margin: 0 }}>🔎 AI scouting report</h3>
+          <button className="ghost" onClick={() => setShowR(true)} disabled={showR}>
+            {report.isFetching ? <><span className="spinner" />Scouting…</> : "Generate"}
+          </button>
+        </div>
+        {report.data?.text && <p className="commentary" style={{ marginTop: 12 }}>{report.data.text}</p>}
       </div>
 
       <h2>Squad</h2>

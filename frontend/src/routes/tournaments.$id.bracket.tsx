@@ -6,11 +6,12 @@ export function BracketPage() {
   return (
     <section>
       <nav className="subnav">
-        <Link to="/tournaments/$id" params={{ id }}>← Overview</Link>
-        <Link to="/tournaments/$id/groups" params={{ id }}>Groups</Link>
-        <Link to="/tournaments/$id/matches" params={{ id }}>Matches</Link>
+        <Link to="/tournaments/$id" params={{ id }} className="back">← Overview</Link>
+        <Link to="/tournaments/$id/groups" params={{ id }}>⚽ Groups</Link>
+        <Link to="/tournaments/$id/matches" params={{ id }}>📅 Matches</Link>
+        <Link to="/tournaments/$id/teams" params={{ id }}>🌍 Teams</Link>
       </nav>
-      <h2>Knockout bracket</h2>
+      <h1>🏆 Knockout bracket</h1>
       <BracketView tournamentId={id} />
     </section>
   );
