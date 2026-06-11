@@ -5,6 +5,7 @@ import { useMatchEvents } from "../hooks/useMatchEvents";
 import { useCommentary } from "../hooks/useMatches";
 import { PitchReplay } from "../components/match/PitchReplay";
 import { LiveMatch } from "../components/match/LiveMatch";
+import { CoachReport } from "../components/match/CoachReport";
 import { TeamBadge } from "../components/common/TeamBadge";
 
 const TIMELINE_TYPES = new Set(["goal", "penalty", "et_start", "fulltime", "end"]);
@@ -89,6 +90,8 @@ export function MatchDetail() {
           ))}
         </ul>
       )}
+
+      {data && <CoachReport mid={mid} homeNation={data.homeNation} awayNation={data.awayNation} />}
     </section>
   );
 }

@@ -7,16 +7,27 @@ the MatchRequest — identical (home, away, seed, rules) → identical everythin
 from __future__ import annotations
 from dataclasses import dataclass
 
-from src.domain.match import MatchEvent, MatchEventType, MatchRequest, MatchResult, MatchStats
+from src.domain.match import (
+    CoachDecision, MatchEvent, MatchEventType, MatchRequest, MatchResult, MatchStats,
+)
 from src.domain.team import Team
 from src.seed.rng import SeededRng
 from . import behaviors as B
+from . import coach
+from .match_report import build_player_ratings, build_reports
 from .physics import (
     BOX_D, BOX_W, FIELD_L, FIELD_W, GOAL_W, PAD, PEN_SPOT, clamp, dist,
     step_ball, step_players,
 )
 from .tactics import FORMATIONS, style_for_dna
 from .world import Ball, Player, TeamState, World
+
+_KIND_EVENT = {
+    "tactic": MatchEventType.TACTIC_CHANGE,
+    "formation": MatchEventType.FORMATION_CHANGE,
+    "substitution": MatchEventType.SUBSTITUTION,
+}
+BENCH_MAX = 7          # bodies on the bench (subs are limited to subs_left)
 
 DT = 0.05                      # 20 Hz physics
 STEPS_PER_HALF = 1600          # 80 sim-seconds per half
@@ -25,16 +36,21 @@ FRAME_EVERY = 12               # sample a frame every ~0.6 s
 
 
 # --------------------------------------------------------------------------- #
-def _runtime_player(gp, team: int, dir_: int, slot, idx: int, coach_aggr: float) -> Player:
-    role, fx, fy = slot
+def _runtime_player(gp, team: int, dir_: int, role: str, fx: float, fy: float,
+                    shirt: int, coach_aggr: float, played: bool) -> Player:
     is_gk = role == "GK"
     return Player(
-        team=team, dir=dir_, role=role, fx=fx, fy=fy, pid=gp.id,
+        team=team, dir=dir_, role=role, fx=fx, fy=fy, pid=gp.id, shirt=shirt,
         max_v=5.4 if is_gk else 6.7 + gp.pace * 1.4,
         accel=26.0 if is_gk else 28.0 + gp.accel * 6.0,
         skill=(gp.passing + gp.dribbling + gp.defending + gp.vision) / 4.0,
         aggr=clamp(0.35 + coach_aggr * 0.3 + (1 - gp.teamwork) * 0.2, 0.2, 0.85),
         shooting=gp.shooting, passing=gp.passing,
+        pace=gp.pace, dribbling=gp.dribbling, vision=gp.vision, defending=gp.defending,
+        stamina_attr=gp.stamina, teamwork=gp.teamwork,
+        overall=(gp.shooting + gp.passing + gp.dribbling + gp.pace + gp.vision
+                 + gp.defending + gp.stamina + gp.teamwork) / 8.0,
+        played=played,
     )
 
 
@@ -42,15 +58,23 @@ def _build_team(team: Team, idx: int) -> TeamState:
     dir_ = +1 if idx == 0 else -1
     form_key = team.coach.formation.value if team.coach.formation.value in FORMATIONS else "4-3-3"
     slots = FORMATIONS[form_key]
-    xi_ids = list(team.xi)
     by_id = {p.id: p for p in team.squad}
-    xi = [by_id[i] for i in xi_ids if i in by_id][:11] or team.squad[:11]
-    players = [_runtime_player(xi[i], idx, dir_, slots[i], i, team.coach.aggression)
-               for i in range(min(11, len(xi)))]
+    xi = [by_id[i] for i in team.xi if i in by_id][:11] or team.squad[:11]
+    n = min(11, len(xi))
+    players = [_runtime_player(xi[i], idx, dir_, slots[i][0], slots[i][1], slots[i][2],
+                               i + 1, team.coach.aggression, True)
+               for i in range(n)]
+    # bench: squad members not in the XI, parked off-pitch until subbed on.
+    on = {p.id for p in xi[:n]}
+    spare = [p for p in team.squad if p.id not in on][:BENCH_MAX]
+    bench = [_runtime_player(gp, idx, dir_, gp.role.value, 0.5, 0.5,
+                             n + 1 + k, team.coach.aggression, False)
+             for k, gp in enumerate(spare)]
     return TeamState(
         idx=idx, dir=dir_, form_key=form_key, style_key=style_for_dna(team.style_dna),
-        players=players, coach_t=0.0,
+        players=players, coach_t=0.0, name=team.nation,
         goal_x=FIELD_L if dir_ > 0 else 0.0, own_goal_x=0.0 if dir_ > 0 else FIELD_L,
+        bench=bench, roster=players + bench, subs_left=5,
     )
 
 
@@ -150,6 +174,7 @@ def _send_off(p: Player) -> None:
 
 
 def _commit_foul(world: World, rng: SeededRng, fouler: Player, victim: Player) -> None:
+    fouler.fouls_p += 1
     in_box = ((fouler.x < BOX_D if fouler.team == 0 else fouler.x > FIELD_L - BOX_D)
               and abs(fouler.y - FIELD_W / 2) < BOX_W / 2)
     awarded = 1 - fouler.team
@@ -201,6 +226,7 @@ def _update_control(world: World, rng: SeededRng) -> None:
             if dist(d.x, d.y, b.x, b.y) < B.TACKLE_R:
                 d.tackle_cool = 0.55
                 if rng.random() < (0.40 + d.skill * 0.35 - carrier.skill * 0.30):
+                    d.tackles_won += 1
                     b.carrier = None
                     b.kick_lock = 0.10
                     b.last_kick = carrier
@@ -234,6 +260,12 @@ def _update_control(world: World, rng: SeededRng) -> None:
                                clamp(best.y, PAD + 2, FIELD_W - PAD - 2))
                 return
             b.offside_mark = None
+            # completed pass: the intended receiver (same team) gained control.
+            if (b.intended is best and b.last_passer is not None
+                    and b.last_passer.team == best.team and b.last_passer is not best):
+                b.last_passer.passes_cmp += 1
+            b.intended = None
+            b.last_passer = None
             b.carrier = best
             world.last_touch_team = best.team
             best.dec_t = 0.0
@@ -242,25 +274,15 @@ def _update_control(world: World, rng: SeededRng) -> None:
             b.vy *= 0.2
 
 
-def _coach_tick(world: World, rng: SeededRng) -> None:
+def _track_condition(world: World, real_s: float, dt_min: float) -> None:
+    """Accumulate distance covered and deplete stamina (slower legs when tired).
+    Higher stamina attribute → slower depletion; subs come on fresh (stamina 1.0)."""
     for t in world.teams:
-        t.coach_t -= DT
-        if t.coach_t <= 0:
-            t.coach_t = rng.uniform(12, 20)
-            men = len(world.active(t))
-            opp = len(world.active(world.teams[1 - t.idx]))
-            diff = world.score[t.idx] - world.score[1 - t.idx]
-            late = world.clock > 70
-            if men < opp:
-                t.style_key = "Defensive"
-            elif men > opp:
-                t.style_key = "Possession Attack"
-            elif late and diff < 0:
-                t.style_key = "Total Football" if diff <= -2 else "Possession Attack"
-            elif late and diff > 0:
-                t.style_key = "Counter-Attack"
-            else:
-                t.style_key = "Tiki-Taka" if rng.random() < 0.5 else "Possession Attack"
+        for p in world.active(t):
+            sp = (p.vx * p.vx + p.vy * p.vy) ** 0.5
+            p.distance += sp * real_s
+            load = 0.0035 + 0.004 * (sp / (p.max_v or 1.0))
+            p.stamina = max(0.25, p.stamina - dt_min * load / (0.45 + p.stamina_attr))
 
 
 @dataclass
@@ -268,6 +290,7 @@ class _Acc:
     events: list
     frames: list
     capture: bool
+    decisions: list  # CoachDecision records (also mirrored as timeline events)
 
 
 class SimulationRuntime:
@@ -277,7 +300,7 @@ class SimulationRuntime:
             teams=[_build_team(req.home, 0), _build_team(req.away, 1)],
             ball=Ball(),
         )
-        acc = _Acc(events=[], frames=[], capture=capture_frames)
+        acc = _Acc(events=[], frames=[], capture=capture_frames, decisions=[])
         kickoff = 0 if rng.random() < 0.5 else 1
         _formation_reset(world, kickoff)
         acc.events.append(MatchEvent(t=0.0, type=MatchEventType.KICKOFF))
@@ -309,12 +332,23 @@ class SimulationRuntime:
         tot_poss = world.poss[0] + world.poss[1] or 1
         fair = [sum(p.yellow + (3 if p.sent_off else 0) for p in t.players)
                 for t in world.teams]
+
+        ratings = build_player_ratings(world, clock)
+        reports = build_reports(world, ratings, clock)
+        # Mirror the analysis into the event log (one event) so the API can serve it.
+        acc.events.append(MatchEvent(
+            t=clock, type=MatchEventType.REPORT,
+            meta={"ratings": [r.model_dump() for r in ratings],
+                  "reports": [r.model_dump() for r in reports],
+                  "decisions": [d.model_dump() for d in acc.decisions]}))
+
         result = MatchResult(
             match_id=req.match_id, score_home=world.score[0], score_away=world.score[1],
             decided_by=decided_by, winner=winner, events=acc.events,
             stats=MatchStats(poss_home=round(world.poss[0] / tot_poss, 3),
                              shots_home=world.shots[0], shots_away=world.shots[1],
                              fairplay_home=fair[0], fairplay_away=fair[1]),
+            player_ratings=ratings, coach_decisions=acc.decisions, reports=reports,
         )
         if capture_frames:
             result.frames = acc.frames  # type: ignore[attr-defined]
@@ -332,6 +366,8 @@ class SimulationRuntime:
               steps: int, kickoff: int = 0) -> None:
         if min0 > 0:
             _formation_reset(world, kickoff)
+        dt_min = (min1 - min0) / steps          # game-minutes per physics step
+        real_s = dt_min * 60.0                  # for distance accounting
         for i in range(steps):
             world.clock = min0 + (min1 - min0) * i / steps
             world.state_t -= DT if world.state == "kickoff" else 0.0
@@ -343,6 +379,7 @@ class SimulationRuntime:
 
             B.ai_step(world, rng, DT)
             step_players(world, DT)
+            _track_condition(world, real_s, dt_min)
             if world.state == "play":
                 ev = step_ball(world, DT)
                 if ev == "goal_home":
@@ -351,6 +388,9 @@ class SimulationRuntime:
                     self._goal(world, 1)
                 elif ev == "save":
                     side = "home" if world.last_touch_team == 0 else "away"
+                    gk = world.ball.carrier
+                    if gk is not None and gk.role == "GK":
+                        gk.saves_p += 1
                     acc.events.append(MatchEvent(t=round(world.clock, 1),
                                                  type=MatchEventType.SAVE, team=side))
                 elif ev in ("out_left", "out_right"):
@@ -361,7 +401,12 @@ class SimulationRuntime:
                 _update_control(world, rng)
             else:
                 _dead_ball_ai(world, rng)
-            _coach_tick(world, rng)
+
+            for d in coach.coach_tick(world, rng, DT):
+                acc.decisions.append(CoachDecision(**d))
+                acc.events.append(MatchEvent(
+                    t=d["t"], type=_KIND_EVENT[d["kind"]], team=d["side"],
+                    meta={"summary": d["summary"], "reason": d["reason"]}))
 
             if world.ball.carrier is not None:
                 world.poss[world.ball.carrier.team] += 1
@@ -378,6 +423,14 @@ class SimulationRuntime:
                 acc.frames.append(self._frame(world))
 
     def _goal(self, world: World, scorer: int) -> None:
+        # credit the scorer (last player to strike) and assist (last intentional passer)
+        b = world.ball
+        striker = b.last_kick
+        if striker is not None and striker.team == scorer:
+            striker.goals_p += 1
+            passer = b.last_passer
+            if passer is not None and passer.team == scorer and passer is not striker:
+                passer.assists_p += 1
         world.score[scorer] += 1
         _formation_reset(world, 1 - scorer)
 

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { http } from "../api/client";
-import type { MatchSummary } from "../api/types";
+import type { MatchReport, MatchSummary } from "../api/types";
 
 export const useMatches = (id: string) =>
   useQuery({
@@ -17,5 +17,13 @@ export const useCommentary = (matchId: string, enabled: boolean) =>
         `/matches/${matchId}/commentary`,
       ),
     enabled,
+    staleTime: Infinity,
+  });
+
+/** AI coach decisions + player performance ratings for a match. */
+export const useMatchReport = (mid: string) =>
+  useQuery({
+    queryKey: ["report", mid],
+    queryFn: () => http<MatchReport>(`/matches/${mid}/report`),
     staleTime: Infinity,
   });

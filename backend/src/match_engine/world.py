@@ -20,6 +20,15 @@ class Player:
     aggr: float               # foul tendency (0..1)
     shooting: float
     passing: float
+    # full skill profile (carried from the generated player for ratings + sub logic)
+    pace: float = 0.5
+    dribbling: float = 0.5
+    vision: float = 0.5
+    defending: float = 0.5
+    stamina_attr: float = 0.5
+    teamwork: float = 0.5
+    overall: float = 0.5      # mean technical+physical quality, for sub ranking
+    shirt: int = 0            # display number (XI/bench order)
     x: float = 0.0
     y: float = 0.0
     vx: float = 0.0
@@ -33,6 +42,20 @@ class Player:
     action: Optional[dict] = None
     yellow: int = 0
     sent_off: bool = False
+    # live condition + per-match performance counters
+    stamina: float = 1.0      # 1 = fresh, depletes with distance; scales speed
+    min_on: float = 0.0       # clock minute this player came onto the pitch
+    min_off: Optional[float] = None  # clock minute removed (sub off), else None
+    distance: float = 0.0     # metres covered
+    passes_att: int = 0
+    passes_cmp: int = 0
+    shots_p: int = 0
+    goals_p: int = 0
+    assists_p: int = 0
+    tackles_won: int = 0
+    fouls_p: int = 0
+    saves_p: int = 0
+    played: bool = True       # appeared in the match (starters True; bench set on entry)
 
 
 @dataclass
@@ -47,6 +70,7 @@ class Ball:
     last_kick: Optional[Player] = None
     intended: Optional[Player] = None
     offside_mark: Optional[dict] = None
+    last_passer: Optional[Player] = None   # most recent intentional pass origin (for assists)
 
 
 @dataclass
@@ -55,10 +79,16 @@ class TeamState:
     dir: int
     form_key: str
     style_key: str
-    players: list[Player]
+    players: list[Player]            # always exactly 11 on-pitch bodies (subs swap in-place)
     coach_t: float
     goal_x: float
     own_goal_x: float
+    name: str = ""
+    bench: list[Player] = field(default_factory=list)   # not rendered until subbed on
+    roster: list[Player] = field(default_factory=list)  # every body created (for ratings)
+    subs_left: int = 5
+    form_changes: int = 0
+    style_changes: int = 0
 
 
 @dataclass

@@ -45,3 +45,27 @@ export interface TeamDetail {
   colors: Record<string, string>;
 }
 export interface AiText { text: string; cached: boolean; }
+
+// --- AI coach & player performance (per match) ---
+export interface PlayerRating {
+  player_id: string; side: "home" | "away"; role: string; shirt: number;
+  rating: number; minutes: number; goals: number; assists: number; shots: number;
+  passes: number; pass_pct: number; tackles: number; saves: number; fouls: number;
+  distance_km: number; stamina_end: number;
+  sub_on: number | null; sub_off: number | null;
+  strengths: string[]; weaknesses: string[];
+}
+export interface CoachDecision {
+  t: number; side: "home" | "away";
+  kind: "formation" | "substitution" | "tactic";
+  summary: string; reason: string;
+}
+export interface TeamReport {
+  side: "home" | "away"; formation_end: string; style_end: string;
+  strengths: string[]; weaknesses: string[];
+  key_player: string | null; key_player_rating: number;
+}
+export interface MatchReport {
+  matchId: string; ratings: PlayerRating[];
+  reports: TeamReport[]; decisions: CoachDecision[];
+}

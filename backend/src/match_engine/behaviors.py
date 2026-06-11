@@ -222,6 +222,9 @@ def kick(world: World, rng: SeededRng, c: Player, t: TeamState, tx, ty, power, i
     d = math.hypot(dx, dy) or 1.0
     ball.vx = dx / d * power + rng.uniform(-1, 1)
     ball.vy = dy / d * power + rng.uniform(-1, 1)
+    if recv is not None and not is_clear:        # an intentional pass (not a clearance/shot)
+        c.passes_att += 1
+        ball.last_passer = c
     oline = offside_line_for(world, t.idx)
     if recv and beyond(t.dir, recv.x, oline) and in_opp_half(t, recv.x) and beyond(t.dir, recv.x, ball.x):
         ball.offside_mark = {"team": t.idx, "recv": recv, "line": oline}
@@ -237,6 +240,7 @@ def shoot(world: World, rng: SeededRng, c: Player, t: TeamState) -> None:
     kick(world, rng, c, t, t.goal_x, gy, rng.uniform(22, 29), True, None)
     world.ball.offside_mark = None
     world.shots[t.idx] += 1
+    c.shots_p += 1
 
 
 def ai_step(world: World, rng: SeededRng, dt: float) -> None:
@@ -256,7 +260,8 @@ def ai_step(world: World, rng: SeededRng, dt: float) -> None:
         for p in world.active(t):
             if p.tackle_cool > 0:
                 p.tackle_cool -= dt
-            p.mv = p.max_v * st.tempo
+            # tired legs are slower: stamina (1 fresh .. 0.25 spent) scales top speed.
+            p.mv = p.max_v * st.tempo * (0.72 + 0.28 * p.stamina)
             if p.role == "GK":
                 gk_target(world, rng, p, t)
                 continue

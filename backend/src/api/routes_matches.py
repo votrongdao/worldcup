@@ -28,6 +28,28 @@ async def get_match(mid: str) -> dict:
             "events": events}
 
 
+@router.get("/{mid}/report")
+async def get_report(mid: str) -> dict:
+    """AI coach decisions + per-player performance ratings and team strengths /
+    weaknesses for a match (extracted from the recorded REPORT event)."""
+    events = [_as_dict(e) for e in await get_deps().log.read(mid)]
+    report = next((e for e in events if e.get("type") == "report"), None)
+    decisions = [
+        {"t": e.get("t"), "side": e.get("team"),
+         "kind": (e.get("type") or "").replace("_change", ""),
+         **(e.get("meta") or {})}
+        for e in events
+        if e.get("type") in ("substitution", "formation_change", "tactic_change")
+    ]
+    meta = (report or {}).get("meta", {})
+    return {
+        "matchId": mid,
+        "ratings": meta.get("ratings", []),
+        "reports": meta.get("reports", []),
+        "decisions": meta.get("decisions", decisions),
+    }
+
+
 @router.get("/{mid}/commentary")
 async def get_commentary(mid: str) -> dict:
     """AI commentary for a match (Azure AI Foundry, cached by match id)."""
