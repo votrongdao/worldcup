@@ -89,6 +89,16 @@ class TournamentOrchestrator:
         await self._supervisor.snapshot(t)
 
         await self._set_phase(t, Phase.GROUP)
+        if not config.auto_play:
+            # Self-play: schedule the group fixtures + empty tables, then hand control
+            # to the user (the SelfPlayCoordinator plays + advances on demand).
+            t.fixtures.extend(self._sched.group_fixtures(t.group_of))
+            groups = sorted(set(t.group_of.values()))
+            t.standings = {g: order_group(empty_table(t.group_of, g), [], config.seed, g)
+                           for g in groups}
+            await self._supervisor.snapshot(t)
+            await self._emit("run_paused", reason="self_play")
+            return t
         await self._run_group_stage(t)
         await self._supervisor.snapshot(t)
 

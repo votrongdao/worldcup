@@ -16,10 +16,12 @@ export interface LiveFrame {
   scoreAway: number;
 }
 export interface LiveEnd { scoreHome: number; scoreAway: number; decidedBy: string; }
+export interface LiveEvent { t: number; etype: string; team?: "home" | "away"; meta?: Record<string, unknown>; }
 
 export interface LiveHandlers {
   onMeta?: (m: LiveMeta) => void;
   onFrame?: (f: LiveFrame) => void;
+  onEvent?: (e: LiveEvent) => void;
   onEnd?: (e: LiveEnd) => void;
   onClose?: () => void;
 }
@@ -32,6 +34,7 @@ export function connectLive(tid: string, mid: string, h: LiveHandlers): WebSocke
     const m = JSON.parse(e.data);
     if (m.type === "meta") h.onMeta?.(m as LiveMeta);
     else if (m.type === "frame") h.onFrame?.(m as LiveFrame);
+    else if (m.type === "event") h.onEvent?.(m as LiveEvent);
     else if (m.type === "end") h.onEnd?.(m as LiveEnd);
   };
   ws.onclose = () => h.onClose?.();

@@ -24,6 +24,7 @@ class TournamentConfig(BaseModel):
     advance_per_group: int = 2
     third_place: bool = True
     seed: int = 0
+    auto_play: bool = True            # False = self-play: user plays each fixture from the UI
 
 
 class Fixture(BaseModel):

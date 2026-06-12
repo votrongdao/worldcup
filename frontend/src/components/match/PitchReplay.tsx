@@ -5,7 +5,9 @@ import type { Frame } from "../../api/types";
 
 const MIN_PER_SEC = 2.2; // playback: sim-minutes advanced per real second at 1x
 
-export function PitchReplay({ frames, duration }: { frames: Frame[]; duration: number }) {
+export function PitchReplay({
+  frames, duration, onClock,
+}: { frames: Frame[]; duration: number; onClock?: (t: number) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState(1);
@@ -14,8 +16,16 @@ export function PitchReplay({ frames, duration }: { frames: Frame[]; duration: n
   const tRef = useRef(0);
   const playingRef = useRef(true);
   const speedRef = useRef(1);
+  const lastMinRef = useRef(-1);
+  const onClockRef = useRef(onClock);
   useEffect(() => { playingRef.current = playing; }, [playing]);
   useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { onClockRef.current = onClock; }, [onClock]);
+
+  function emitClock(v: number) {
+    const m = Math.floor(v);
+    if (m !== lastMinRef.current) { lastMinRef.current = m; onClockRef.current?.(v); }
+  }
 
   function frameAt(time: number): Frame | undefined {
     if (!frames.length) return undefined;
@@ -40,6 +50,7 @@ export function PitchReplay({ frames, duration }: { frames: Frame[]; duration: n
         if (nt >= duration) { nt = duration; setPlaying(false); }
         tRef.current = nt;
         setT(nt);
+        emitClock(nt);
       }
       drawFrame(ctx, frameAt(tRef.current));
       raf = requestAnimationFrame(loop);
@@ -49,8 +60,8 @@ export function PitchReplay({ frames, duration }: { frames: Frame[]; duration: n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frames, duration]);
 
-  const scrub = (v: number) => { setPlaying(false); tRef.current = v; setT(v); };
-  const restart = () => { tRef.current = 0; setT(0); setPlaying(true); };
+  const scrub = (v: number) => { setPlaying(false); tRef.current = v; setT(v); emitClock(v); };
+  const restart = () => { tRef.current = 0; setT(0); lastMinRef.current = -1; emitClock(0); setPlaying(true); };
 
   return (
     <div className="pitch-wrap">

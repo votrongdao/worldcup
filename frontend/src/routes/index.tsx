@@ -12,6 +12,7 @@ const STEPS = [
 
 export function Dashboard() {
   const [seed, setSeed] = useState(randomSeed());
+  const [selfPlay, setSelfPlay] = useState(false);
   const create = useCreateTournament();
   const navigate = useNavigate();
 
@@ -19,7 +20,7 @@ export function Dashboard() {
     create.mutate(
       {
         format: "world_cup_32", teams: 32, groups: 8, perGroup: 4,
-        advancePerGroup: 2, thirdPlace: true, seed,
+        advancePerGroup: 2, thirdPlace: true, seed, autoPlay: !selfPlay,
       },
       { onSuccess: (res) => navigate({ to: "/tournaments/$id", params: { id: res.id } }) },
     );
@@ -53,6 +54,11 @@ export function Dashboard() {
             {create.isPending ? <><span className="spinner" />Starting…</> : "Start tournament →"}
           </button>
         </div>
+        <label className="selfplay-toggle">
+          <input type="checkbox" checked={selfPlay} onChange={(e) => setSelfPlay(e.target.checked)} />
+          <span>🎮 <strong>Self-play</strong> — schedule the fixtures and conduct each match
+            yourself (live), instead of auto-simulating the whole tournament.</span>
+        </label>
         {create.isError && (
           <p className="muted" style={{ marginBottom: 0, color: "var(--away)" }}>
             ⚠ Failed to start — is the API running?

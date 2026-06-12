@@ -6,9 +6,23 @@ import { CoachPanel } from "./CoachPanel";
 type Status = "connecting" | "live" | "ended";
 const SPEEDS = [0.3, 0.5, 1, 1.5, 2];
 
-export function LiveMatch({ tid, mid }: { tid: string; mid: string }) {
+interface LiveEvt { t: number; type: string; team?: "home" | "away"; meta?: Record<string, unknown>; }
+
+export function LiveMatch({ tid, mid, onClock, onEvent, onEnded }: {
+  tid: string; mid: string;
+  onClock?: (clock: number) => void;
+  onEvent?: (e: LiveEvt) => void;
+  onEnded?: () => void;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const lastMinRef = useRef(-1);
+  const onClockRef = useRef(onClock);
+  const onEventRef = useRef(onEvent);
+  const onEndedRef = useRef(onEnded);
+  useEffect(() => { onClockRef.current = onClock; }, [onClock]);
+  useEffect(() => { onEventRef.current = onEvent; }, [onEvent]);
+  useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
   const [meta, setMeta] = useState<LiveMeta | null>(null);
   const [score, setScore] = useState({ h: 0, a: 0 });
   const [clock, setClock] = useState(0);
@@ -23,9 +37,15 @@ export function LiveMatch({ tid, mid }: { tid: string; mid: string }) {
       onFrame: (f) => {
         setScore({ h: f.scoreHome, a: f.scoreAway });
         setClock(f.clock);
+        const m = Math.floor(f.clock);
+        if (m !== lastMinRef.current) { lastMinRef.current = m; onClockRef.current?.(f.clock); }
         if (ctx) drawFrame(ctx, f.frame);
       },
-      onEnd: (e) => { setStatus("ended"); setScore({ h: e.scoreHome, a: e.scoreAway }); },
+      onEvent: (ev) => onEventRef.current?.({ t: ev.t, type: ev.etype, team: ev.team, meta: ev.meta }),
+      onEnd: (e) => {
+        setStatus("ended"); setScore({ h: e.scoreHome, a: e.scoreAway });
+        onEndedRef.current?.();
+      },
       onClose: () => setStatus((s) => (s === "live" ? "ended" : s)),
     });
     wsRef.current = ws;

@@ -7,6 +7,7 @@ from src.domain.match import MatchRequest, MatchRules
 from src.domain.tournament import Phase, Tournament
 from src.match_engine.engine import MatchEngine
 from src.orchestrator.fsm import TournamentOrchestrator
+from src.orchestrator.selfplay import SelfPlayCoordinator
 from src.seed.provider import sub_seed
 
 _engine = MatchEngine()
@@ -159,6 +160,25 @@ async def get_replay(tid: str, mid: str):
         "decidedBy": result.decided_by,
         "homeColors": home.colors, "awayColors": away.colors,
         "duration": duration, "frames": result.frames,
+    }
+
+
+@router.post("/{tid}/matches/{mid}/play")
+async def play_match(tid: str, mid: str):
+    """Self-play: simulate + record a scheduled fixture on demand, then advance the
+    tournament (group table / next knockout round). Idempotent for already-played ids."""
+    d = get_deps()
+    t = await _load(tid)
+    coord = SelfPlayCoordinator(d.store, d.log)
+    if coord.fixture(t, mid) is None:
+        raise HTTPException(status_code=404, detail=f"fixture {mid} not found")
+    summary = await coord.play(t, mid)
+    if summary is None:
+        raise HTTPException(status_code=409, detail="match could not be played")
+    return {
+        "matchId": mid, "phase": t.phase.value, "played": True,
+        "scoreHome": summary.score_home, "scoreAway": summary.score_away,
+        "winnerId": summary.winner_id, "decidedBy": summary.decided_by,
     }
 
 

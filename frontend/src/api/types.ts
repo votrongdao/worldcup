@@ -6,6 +6,7 @@ export type Phase =
 export interface TournamentConfig {
   format: string; teams: number; groups: number; perGroup: number;
   advancePerGroup: number; thirdPlace: boolean; seed: number;
+  autoPlay?: boolean;   // false = self-play (you conduct each match)
 }
 export interface TournamentStatus {
   id: string; phase: Phase; runHash: string;

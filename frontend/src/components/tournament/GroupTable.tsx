@@ -15,7 +15,7 @@ function FixtureRow({ f, tid, name }: { f: Fixture; tid: string; name: (id?: str
         <TeamBadge name={name(f.homeId)} size="sm" />
       </span>
       <span className={`gf-score ${f.played ? "" : "pending"}`}>
-        {f.played ? `${f.scoreHome}–${f.scoreAway}` : "vs"}
+        {f.played ? `${f.scoreHome}–${f.scoreAway}` : "▶"}
       </span>
       <span className="gf-side away" style={{ fontWeight: awayWin ? 700 : 500 }}>
         <TeamBadge name={name(f.awayId)} size="sm" />
@@ -23,10 +23,14 @@ function FixtureRow({ f, tid, name }: { f: Fixture; tid: string; name: (id?: str
       </span>
     </>
   );
-  return f.played ? (
-    <Link className="gf-row" to="/tournaments/$id/matches/$mid" params={{ id: tid, mid: f.id }}>{inner}</Link>
-  ) : (
-    <div className="gf-row scheduled" title="Scheduled — not played yet">{inner}</div>
+  // Both played and scheduled fixtures link to the match page (where a scheduled one
+  // can be conducted live).
+  return (
+    <Link
+      className={`gf-row ${f.played ? "" : "scheduled"}`}
+      to="/tournaments/$id/matches/$mid" params={{ id: tid, mid: f.id }}
+      title={f.played ? undefined : "Not played — click to conduct live"}
+    >{inner}</Link>
   );
 }
 

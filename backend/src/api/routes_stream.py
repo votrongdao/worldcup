@@ -11,14 +11,16 @@ import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.app.deps import get_deps
-from src.domain.match import MatchRequest, MatchRules
-from src.domain.tournament import Phase
 from src.match_engine.engine import MatchEngine
 from src.match_engine.tactics import style_for_dna
-from src.seed.provider import sub_seed
+from src.orchestrator.selfplay import SelfPlayCoordinator
 
 router = APIRouter(tags=["stream"])
 _engine = MatchEngine()
+
+# event types surfaced live (coach decisions + goals) for the in-match feed/commentary
+_LIVE_EVENTS = {"goal", "substitution", "formation_change", "tactic_change",
+                "penalty", "et_start"}
 
 _MIN_PER_REALSEC = 2.6     # sim-minutes streamed per real second at 1x (~35 s/match)
 _MAX_STEP = 1.0           # cap per-frame sleep so it never stalls (allows slow-mo)
@@ -45,22 +47,29 @@ async def ws_match(ws: WebSocket, tid: str, mid: str) -> None:
     except Exception:
         await ws.close(code=1008)
         return
+
+    coord = SelfPlayCoordinator(deps.store, deps.log)
     summ = t.results.get(mid)
-    home = t.teams.get(summ.home_id) if summ else None
-    away = t.teams.get(summ.away_id) if summ else None
-    if summ is None or home is None or away is None:
+    fixture = coord.fixture(t, mid)             # every match has a scheduled fixture
+    if fixture is None:
+        await ws.close(code=1008)
+        return
+    home, away = t.teams.get(fixture.home_id), t.teams.get(fixture.away_id)
+    if home is None or away is None:
         await ws.close(code=1008)
         return
 
-    knockout = summ.phase is not Phase.GROUP
-    req = MatchRequest(
-        match_id=mid, home=home, away=away,
-        seed=sub_seed(t.config.seed, "match", mid),
-        rules=MatchRules(duration=90.0, extra_time=knockout, penalties=knockout),
-    )
+    req = coord.request_for(t, fixture)
+    record = summ is None                       # unplayed fixture -> record the result at the end
     # Engine runs synchronously (~0.6 s) then we stream its frames paced in real time.
     result = await asyncio.to_thread(_engine.simulate, req, True)
     goals = sorted((e.t, e.team) for e in result.events if e.type.value == "goal")
+    live_events = sorted(
+        ({"t": e.t, "etype": e.type.value, "team": e.team, "meta": e.meta}
+         for e in result.events if e.type.value in _LIVE_EVENTS),
+        key=lambda e: e["t"],
+    )
+    sent_ev = 0
 
     # Playback speed is adjustable live: a concurrent reader updates `speed` from the
     # client's {"type":"speed","value":x} control messages (clamped to [0.3, 2.0]).
@@ -89,10 +98,22 @@ async def ws_match(ws: WebSocket, tid: str, mid: str) -> None:
             prev = fr["t"]
             if gap > 0:
                 await asyncio.sleep(min(gap, _MAX_STEP))
+            # surface coach decisions + goals as they happen (drives the live feed)
+            while sent_ev < len(live_events) and live_events[sent_ev]["t"] <= fr["t"]:
+                await ws.send_json({"type": "event", **live_events[sent_ev]})
+                sent_ev += 1
             sh = sum(1 for gt, gs in goals if gt <= fr["t"] and gs == "home")
             sa = sum(1 for gt, gs in goals if gt <= fr["t"] and gs == "away")
             await ws.send_json({"type": "frame", "frame": fr, "clock": fr["t"],
                                 "scoreHome": sh, "scoreAway": sa})
+        for ev in live_events[sent_ev:]:        # flush any trailing events
+            await ws.send_json({"type": "event", **ev})
+        if record:                              # self-play: persist + advance BEFORE 'end'
+            try:
+                await coord.record(t, fixture, result)
+            except Exception:
+                pass
+            record = False
         await ws.send_json({"type": "end", "scoreHome": result.score_home,
                             "scoreAway": result.score_away, "decidedBy": result.decided_by})
     except WebSocketDisconnect:
