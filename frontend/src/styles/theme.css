@@ -615,6 +615,22 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .dd-teamgrid { grid-template-columns: 1fr; }
 }
 
+/* ---------------------------------------------------------------- group fixtures */
+.group-fixtures { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.gf-head { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); margin-bottom: 6px; display: flex; gap: 6px; }
+.gf-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 9px; color: var(--ink); font-size: .82rem;
+  transition: background .14s; }
+a.gf-row:hover { background: var(--bg-2); text-decoration: none; color: var(--ink); }
+.gf-row.scheduled { opacity: .72; }
+.gf-side { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.gf-side.home { justify-content: flex-end; }
+.gf-side .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gf-score { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 42px; text-align: center;
+  padding: 2px 8px; border-radius: 7px; background: var(--bg); }
+.gf-score.pending { color: var(--muted-2); font-weight: 500; background: transparent; }
+
 /* ---------------------------------------------------------------- coach & player report */
 .coach-report { margin-top: 8px; }
 .cr-decisions { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }

@@ -27,6 +27,12 @@ export interface MatchSummary {
   matchId: string; homeId: string; awayId: string; phase: Phase;
   scoreHome: number; scoreAway: number; decidedBy: string; winnerId?: string | null;
 }
+export interface Fixture {
+  id: string; phase: Phase; homeId: string; awayId: string;
+  group: string | null; matchday: number;
+  scoreHome: number | null; scoreAway: number | null;
+  winnerId: string | null; played: boolean;
+}
 export interface MatchEvent { t: number; type: string; team?: "home" | "away"; }
 export interface Frame { t: number; players: [number, number][]; ball: [number, number]; }
 

@@ -74,6 +74,20 @@ class BracketSlotDTO(CamelModel):
     winner_id: Optional[str] = None
 
 
+class FixtureDTO(CamelModel):
+    id: str
+    phase: Phase
+    home_id: str
+    away_id: str
+    group: Optional[str] = None
+    matchday: int = 0
+    # merged with results when available (None = not played yet)
+    score_home: Optional[int] = None
+    score_away: Optional[int] = None
+    winner_id: Optional[str] = None
+    played: bool = False
+
+
 class PlayerDTO(CamelModel):
     id: str
     role: str

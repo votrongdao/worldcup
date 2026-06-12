@@ -15,6 +15,7 @@ from .schemas import (
     CoachDTO,
     CreateTournamentRequest,
     CreateTournamentResponse,
+    FixtureDTO,
     MatchSummaryDTO,
     PlayerDTO,
     StandingDTO,
@@ -110,6 +111,25 @@ async def get_team_detail(tid: str, team_id: str):
 async def get_matches(tid: str):
     t = await _load(tid)
     return [MatchSummaryDTO(**s.model_dump()) for s in t.results.values()]
+
+
+@router.get("/{tid}/fixtures", response_model=list[FixtureDTO])
+async def get_fixtures(tid: str):
+    """The full schedule (every fixture, played or not), merged with results so the
+    UI can show each group's match list before the stage finishes."""
+    t = await _load(tid)
+    out: list[FixtureDTO] = []
+    for f in t.fixtures:
+        r = t.results.get(f.id)
+        out.append(FixtureDTO(
+            id=f.id, phase=f.phase, home_id=f.home_id, away_id=f.away_id,
+            group=f.group, matchday=f.matchday,
+            score_home=r.score_home if r else None,
+            score_away=r.score_away if r else None,
+            winner_id=r.winner_id if r else None,
+            played=r is not None,
+        ))
+    return out
 
 
 @router.get("/{tid}/matches/{mid}/replay")
