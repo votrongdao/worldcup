@@ -10,6 +10,7 @@ Deterministic: the seed is sub_seed(config.seed, "match", fixture.id), exactly a
 auto orchestrator uses, so a self-played match equals its auto-played counterpart.
 """
 from __future__ import annotations
+import asyncio
 
 from src.domain.match import MatchRequest, MatchResult, MatchRules
 from src.domain.tournament import BracketSlot, Fixture, MatchSummary, Phase, Tournament
@@ -59,35 +60,68 @@ class SelfPlayCoordinator:
         result = self._engine.simulate(self.request_for(t, f))
         return await self.record(t, f, result)
 
-    async def record(self, t: Tournament, f: Fixture, result: MatchResult) -> MatchSummary:
-        """Persist a (possibly already-simulated) result and advance the tournament."""
-        if f.id in t.results:
-            return t.results[f.id]
-        await self._log.append(f.id, result.events)        # event log (replay/report/commentary)
+    def current_round(self, t: Tournament) -> list[Fixture]:
+        """The fixtures that make up the current 'round' — one group matchday, or the
+        whole current knockout phase — so they can be played together."""
+        if t.phase is Phase.GROUP:
+            group_fx = [f for f in t.fixtures if f.phase is Phase.GROUP]
+            days = sorted({f.matchday for f in group_fx if f.id not in t.results})
+            if not days:
+                return []
+            return [f for f in group_fx if f.matchday == days[0]]
+        # knockout: the current phase, plus the third-place playoff (played alongside the final)
+        phases = {t.phase, Phase.THIRD_PLACE} if t.phase is Phase.FINAL else {t.phase}
+        return [f for f in t.fixtures if f.phase in phases]
 
-        knockout = f.phase is not Phase.GROUP
-        if knockout:
+    async def play_round(self, t: Tournament) -> int:
+        """Play every unplayed fixture in the current round in parallel, then update
+        tables + advance once. Returns how many matches were played."""
+        pending = [f for f in self.current_round(t) if f.id not in t.results]
+        if not pending:
+            return 0
+        results = await asyncio.gather(
+            *(asyncio.to_thread(self._engine.simulate, self.request_for(t, f)) for f in pending)
+        )
+        groups: set[str] = set()
+        for f, result in zip(pending, results):
+            await self._log.append(f.id, result.events)
+            self._apply(t, f, result)
+            if f.group:
+                groups.add(f.group)
+        for g in groups:
+            self._recompute_group(t, g)
+        self._advance(t)
+        await self._supervisor.snapshot(t)
+        return len(pending)
+
+    def _apply(self, t: Tournament, f: Fixture, result: MatchResult) -> None:
+        """Resolve + persist a single summary (no standings/advance — caller batches those)."""
+        if f.phase is not Phase.GROUP:
             result = TournamentPolicy(t.config.seed).resolve_draw(result, f.id)
         winner_id = (f.home_id if result.winner == "home"
                      else f.away_id if result.winner == "away" else None)
-        summary = MatchSummary(
+        t.results[f.id] = MatchSummary(
             match_id=f.id, home_id=f.home_id, away_id=f.away_id, phase=f.phase,
             score_home=result.score_home, score_away=result.score_away,
             decided_by=result.decided_by, winner_id=winner_id,
             fairplay_home=result.stats.fairplay_home, fairplay_away=result.stats.fairplay_away,
         )
-        t.results[f.id] = summary
-
-        if f.group:
-            self._recompute_group(t, f.group)
-        if knockout:
+        if f.phase is not Phase.GROUP:
             t.bracket = [b for b in t.bracket if b.match_id != f.id]
             t.bracket.append(BracketSlot(match_id=f.id, phase=f.phase, home_id=f.home_id,
                                          away_id=f.away_id, winner_id=winner_id))
 
+    async def record(self, t: Tournament, f: Fixture, result: MatchResult) -> MatchSummary:
+        """Persist a (possibly already-simulated) result and advance the tournament."""
+        if f.id in t.results:
+            return t.results[f.id]
+        await self._log.append(f.id, result.events)        # event log (replay/report/commentary)
+        self._apply(t, f, result)
+        if f.group:
+            self._recompute_group(t, f.group)
         self._advance(t)
         await self._supervisor.snapshot(t)
-        return summary
+        return t.results[f.id]
 
     # ----------------------------------------------------------------- internals
     def _recompute_group(self, t: Tournament, g: str) -> None:

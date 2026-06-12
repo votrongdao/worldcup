@@ -332,6 +332,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .match-link .meta { grid-column: 1 / -1; text-align: center; margin-top: 2px; }
 
+.match-link.scheduled { opacity: .82; border-style: dashed; }
+.match-link.scheduled:hover { opacity: 1; }
+.match-link .score.pending { background: rgba(0,113,227,.1); color: var(--blue); font-weight: 700; }
+.matchday-label { font-size: .72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); margin: 6px 0 2px 2px; }
+
 .phase-head { display: flex; align-items: center; gap: 10px; margin: 26px 0 8px; }
 .phase-head h3 { margin: 0; }
 .phase-head .rule { flex: 1; height: 1px; background: var(--line); }

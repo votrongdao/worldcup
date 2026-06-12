@@ -1,7 +1,7 @@
 // API types mirroring the backend Pydantic contracts (camelCase on the wire).
 export type Phase =
   | "setup" | "generating" | "draw" | "group"
-  | "r16" | "qf" | "sf" | "final" | "done";
+  | "r16" | "qf" | "sf" | "third_place" | "final" | "done";
 
 export interface TournamentConfig {
   format: string; teams: number; groups: number; perGroup: number;

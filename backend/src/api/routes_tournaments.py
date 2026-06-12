@@ -182,6 +182,17 @@ async def play_match(tid: str, mid: str):
     }
 
 
+@router.post("/{tid}/play-round")
+async def play_round(tid: str):
+    """Self-play: play every unplayed fixture in the current round (a group matchday, or
+    the current knockout phase) in parallel, then advance."""
+    d = get_deps()
+    t = await _load(tid)
+    coord = SelfPlayCoordinator(d.store, d.log)
+    n = await coord.play_round(t)
+    return {"played": n, "phase": t.phase.value}
+
+
 @router.post("/{tid}/pause")
 async def pause(tid: str):
     # Snapshot/resume lives in RunSupervisor; cooperative pause is future work.

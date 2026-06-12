@@ -87,3 +87,23 @@ async def test_selfplay_completes_like_autoplay():
     assert t.champion_id == auto.champion_id
     assert t.run_hash == auto.run_hash               # self-play == auto-play
     assert t.third_place_id == auto.third_place_id
+
+
+@pytest.mark.asyncio
+async def test_play_round_parallel_completes_like_autoplay():
+    auto = await _auto(2026, 8, 2)
+    t, coord = await _selfplay(2026, 8, 2)
+    # Each call plays a whole round (a group matchday, or a knockout phase) in parallel.
+    rounds = 0
+    for _ in range(30):
+        if t.phase is Phase.DONE:
+            break
+        n = await coord.play_round(t)
+        if n == 0:
+            break
+        rounds += 1
+    assert t.phase is Phase.DONE
+    assert t.champion_id == auto.champion_id
+    assert t.run_hash == auto.run_hash
+    # 2 groups: 3 group matchdays, then SF, then final+3rd -> ~5 rounds
+    assert rounds <= 6
