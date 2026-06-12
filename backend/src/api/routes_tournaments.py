@@ -193,6 +193,17 @@ async def play_round(tid: str):
     return {"played": n, "phase": t.phase.value}
 
 
+@router.post("/{tid}/play-all", status_code=202)
+async def play_all(tid: str, bg: BackgroundTasks):
+    """Self-play: play the rest of the tournament round by round to the end. Runs in the
+    background and snapshots each round, so the polling UI shows it advance."""
+    d = get_deps()
+    t = await _load(tid)
+    coord = SelfPlayCoordinator(d.store, d.log)
+    bg.add_task(coord.play_all, t)
+    return {"status": "playing", "phase": t.phase.value}
+
+
 @router.post("/{tid}/pause")
 async def pause(tid: str):
     # Snapshot/resume lives in RunSupervisor; cooperative pause is future work.

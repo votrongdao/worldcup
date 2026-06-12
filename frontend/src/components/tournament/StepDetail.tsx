@@ -4,8 +4,9 @@ import { useTournament } from "../../hooks/useTournament";
 import { useTeams, useTeamNames } from "../../hooks/useTeams";
 import { useStandings } from "../../hooks/useStandings";
 import { useMatches } from "../../hooks/useMatches";
+import { useFixtures } from "../../hooks/useFixtures";
 import { TeamBadge } from "../common/TeamBadge";
-import type { MatchSummary, Phase, TeamSummary } from "../../api/types";
+import type { Fixture, MatchSummary, Phase, TeamSummary } from "../../api/types";
 
 const KNOCKOUT_ORDER: Phase[] = ["r16", "qf", "sf", "final"];
 
@@ -79,10 +80,6 @@ const META: Record<string, Meta> = {
   },
 };
 
-function groupOf(teams: TeamSummary[]): Map<string, string> {
-  return new Map(teams.map((t) => [t.id, t.group]));
-}
-
 export function StepDetail({
   tournamentId, stepKey, onClose,
 }: { tournamentId: string; stepKey: string; onClose: () => void }) {
@@ -91,6 +88,7 @@ export function StepDetail({
   const { data: teams = [] } = useTeams(tournamentId);
   const { data: standings = {} } = useStandings(tournamentId);
   const { data: matches = [] } = useMatches(tournamentId);
+  const { data: fixtures = [] } = useFixtures(tournamentId);
   const name = useTeamNames(tournamentId);
 
   useEffect(() => {
@@ -100,8 +98,6 @@ export function StepDetail({
   }, [onClose]);
 
   if (!meta) return null;
-
-  const teamGroup = groupOf(teams);
 
   function MatchRow({ m }: { m: MatchSummary }) {
     const homeWin = m.winnerId === m.homeId;
@@ -124,6 +120,31 @@ export function StepDetail({
           <span className="nm">{name(m.awayId)}</span>
         </span>
         {extra && <span className="dd-extra">{extra}</span>}
+      </Link>
+    );
+  }
+
+  function FixtureRow({ f }: { f: Fixture }) {
+    const homeWin = f.played && f.winnerId === f.homeId;
+    const awayWin = f.played && f.winnerId === f.awayId;
+    return (
+      <Link
+        className={`dd-match ${f.played ? "" : "scheduled"}`}
+        to="/tournaments/$id/matches/$mid"
+        params={{ id: tournamentId, mid: f.id }} onClick={onClose}
+        title={f.played ? undefined : "Not played — click to conduct live"}
+      >
+        <span className="dd-side home" style={{ fontWeight: homeWin ? 700 : 500 }}>
+          <span className="nm">{name(f.homeId)}</span>
+          <TeamBadge name={name(f.homeId)} size="sm" />
+        </span>
+        <span className={`dd-score ${f.played ? "" : "pending"}`}>
+          {f.played ? `${f.scoreHome}–${f.scoreAway}` : "▶"}
+        </span>
+        <span className="dd-side away" style={{ fontWeight: awayWin ? 700 : 500 }}>
+          <TeamBadge name={name(f.awayId)} size="sm" />
+          <span className="nm">{name(f.awayId)}</span>
+        </span>
       </Link>
     );
   }
@@ -178,35 +199,40 @@ export function StepDetail({
     }
 
     if (meta.kind === "group") {
-      const groupEntries = Object.entries(standings).sort(([a], [b]) => a.localeCompare(b));
-      if (!groupEntries.length) return <p className="muted">Group stage hasn’t started yet.</p>;
-      const groupMatches = matches.filter((m) => m.phase === "group");
+      const groupFx = fixtures.filter((f) => f.group);
+      const groupKeys = Object.keys(standings).length
+        ? Object.keys(standings).sort()
+        : [...new Set(groupFx.map((f) => f.group as string))].sort();
+      if (!groupKeys.length) return <p className="muted">Group stage hasn’t been drawn yet.</p>;
       return (
         <div className="dd-groups">
-          {groupEntries.map(([g, rows]) => {
-            const ms = groupMatches.filter((m) => teamGroup.get(m.homeId) === g);
+          {groupKeys.map((g) => {
+            const rows = standings[g] ?? [];
+            const fx = groupFx.filter((f) => f.group === g).sort((a, b) => a.matchday - b.matchday);
             return (
               <div className="dd-group wide" key={g}>
                 <div className="dd-group-h"><span className="g-tag">{g}</span> Group {g}</div>
-                <table className="standings">
-                  <thead><tr><th>Team</th><th className="num">P</th><th className="num">Pts</th></tr></thead>
-                  <tbody>
-                    {rows.map((r, i) => (
-                      <tr key={r.teamId} className={i < 2 ? "qualified" : undefined}>
-                        <td className="team"><span className="team-cell">
-                          <span className="rank">{i + 1}</span>
-                          <TeamBadge name={name(r.teamId)} size="sm" />
-                          <span className="name">{name(r.teamId)}</span>
-                        </span></td>
-                        <td className="num">{r.played}</td>
-                        <td className="num pts">{r.pts}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {ms.length > 0 && (
+                {rows.length > 0 && (
+                  <table className="standings">
+                    <thead><tr><th>Team</th><th className="num">P</th><th className="num">Pts</th></tr></thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={r.teamId} className={i < 2 ? "qualified" : undefined}>
+                          <td className="team"><span className="team-cell">
+                            <span className="rank">{i + 1}</span>
+                            <TeamBadge name={name(r.teamId)} size="sm" />
+                            <span className="name">{name(r.teamId)}</span>
+                          </span></td>
+                          <td className="num">{r.played}</td>
+                          <td className="num pts">{r.pts}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {fx.length > 0 && (
                   <div className="dd-matchlist">
-                    {ms.map((m) => <MatchRow key={m.matchId} m={m} />)}
+                    {fx.map((f) => <FixtureRow key={f.id} f={f} />)}
                   </div>
                 )}
               </div>
@@ -217,9 +243,9 @@ export function StepDetail({
     }
 
     if (meta.kind === "knockout" && meta.phase) {
-      const ms = matches.filter((m) => m.phase === meta.phase);
-      if (!ms.length) return <p className="muted">This round hasn’t been played yet.</p>;
-      return <div className="dd-matchlist">{ms.map((m) => <MatchRow key={m.matchId} m={m} />)}</div>;
+      const fx = fixtures.filter((f) => f.phase === meta.phase);
+      if (!fx.length) return <p className="muted">This round hasn’t been drawn yet.</p>;
+      return <div className="dd-matchlist">{fx.map((f) => <FixtureRow key={f.id} f={f} />)}</div>;
     }
 
     // done

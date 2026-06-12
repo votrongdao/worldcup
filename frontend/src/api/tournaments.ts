@@ -11,6 +11,10 @@ export const getStatus = (id: string) =>
 export const playRound = (id: string) =>
   http<{ played: number; phase: string }>(`/tournaments/${id}/play-round`, { method: "POST" });
 
+/** Self-play: play the rest of the tournament to the end (runs server-side, poll to watch). */
+export const playAll = (id: string) =>
+  http<{ status: string; phase: string }>(`/tournaments/${id}/play-all`, { method: "POST" });
+
 export const pause = (id: string) =>
   http<void>(`/tournaments/${id}/pause`, { method: "POST" });
 

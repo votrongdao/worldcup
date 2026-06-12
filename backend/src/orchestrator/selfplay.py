@@ -94,6 +94,19 @@ class SelfPlayCoordinator:
         await self._supervisor.snapshot(t)
         return len(pending)
 
+    async def play_all(self, t: Tournament) -> int:
+        """Keep playing rounds until the tournament is finished (runs in the background;
+        each round is snapshotted so a polling UI shows it progress)."""
+        total = 0
+        for _ in range(80):                          # safety bound (32-team cup ≈ 7 rounds)
+            if t.phase is Phase.DONE:
+                break
+            n = await self.play_round(t)
+            if n == 0:
+                break
+            total += n
+        return total
+
     def _apply(self, t: Tournament, f: Fixture, result: MatchResult) -> None:
         """Resolve + persist a single summary (no standings/advance — caller batches those)."""
         if f.phase is not Phase.GROUP:

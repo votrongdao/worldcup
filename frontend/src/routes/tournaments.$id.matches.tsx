@@ -2,7 +2,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useFixtures } from "../hooks/useFixtures";
 import { useTeamNames } from "../hooks/useTeams";
-import { playRound } from "../api/tournaments";
+import { playRound, playAll } from "../api/tournaments";
 import { TeamBadge } from "../components/common/TeamBadge";
 import type { Fixture, Phase } from "../api/types";
 
@@ -48,6 +48,10 @@ export function MatchesPage() {
     mutationFn: () => playRound(id),
     onSuccess: () => qc.invalidateQueries(),
   });
+  const all = useMutation({
+    mutationFn: () => playAll(id),
+    onSuccess: () => qc.invalidateQueries(),
+  });
 
   const byPhase: Record<string, Fixture[]> = {};
   for (const f of fixtures) (byPhase[f.phase] ??= []).push(f);
@@ -67,9 +71,14 @@ export function MatchesPage() {
           {fixtures.length - unplayed}/{fixtures.length}
         </span></h1>
         {unplayed > 0 && (
-          <button onClick={() => round.mutate()} disabled={round.isPending}>
-            {round.isPending ? <><span className="spinner" />Playing round…</> : "▶ Play next round (parallel)"}
-          </button>
+          <div className="row">
+            <button className="ghost" onClick={() => round.mutate()} disabled={round.isPending || all.isPending}>
+              {round.isPending ? <><span className="spinner" />Playing round…</> : "▶ Play next round"}
+            </button>
+            <button onClick={() => all.mutate()} disabled={all.isPending}>
+              {all.isPending ? <><span className="spinner" />Playing…</> : "⏩ Play to end"}
+            </button>
+          </div>
         )}
       </div>
       {isLoading && <p className="muted"><span className="spinner" />Loading…</p>}
